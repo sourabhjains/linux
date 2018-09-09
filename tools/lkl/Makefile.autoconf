@@ -44,6 +44,22 @@ define virtio_net_vde
   LDLIBS += $(shell pkg-config --libs vdeplug)
 endef
 
+define dce_host
+  $(call set_autoconf_var,DCE,y)
+  $(call set_autoconf_var,VIRTIO_NET,y)
+  LDFLAGS += -pie
+  CFLAGS += -fPIC $(LINUXINCLUDE)
+  SOSUF := .so
+  $(if $(filter $(1),elf64-x86-64-freebsd),$(call bsd_host))
+  $(if $(filter yes,$(dpdk)),$(call virtio_net_dpdk))
+  $(if $(filter yes,$(vde)),$(call virtio_net_vde))
+  $(if $(strip $(call find_include,fuse.h)),$(call set_autoconf_var,FUSE,y))
+  $(if $(strip $(call find_include,archive.h)),$(call set_autoconf_var,ARCHIVE,y))
+  $(if $(strip $(call find_include,linux/if_tun.h)),$(call set_autoconf_var,VIRTIO_NET_MACVTAP,y))
+  $(if $(filter $(1),elf64-x86-64-freebsd),$(call set_autoconf_var,NEEDS_LARGP,y))
+endef
+
+
 define posix_host
   $(call set_autoconf_var,POSIX,y)
   $(call set_autoconf_var,VIRTIO_NET,y)
@@ -80,6 +96,8 @@ define nt_host
   $(if $(filter $(1),pe-x86-64),$(call nt64_host))
 endef
 
+#Rmoved calls to posix and nt host
+#FIXME
 define do_autoconf
   export CROSS_COMPILE := $(CROSS_COMPILE)
   export CC := $(CROSS_COMPILE)gcc
@@ -88,8 +106,7 @@ define do_autoconf
   $(eval LD := $(CROSS_COMPILE)ld)
   $(eval CC := $(CROSS_COMPILE)gcc)
   $(eval LD_FMT := $(shell $(LD) -r -print-output-format))
-  $(if $(filter $(LD_FMT),$(POSIX_HOSTS)),$(call posix_host,$(LD_FMT)))
-  $(if $(filter $(LD_FMT),$(NT_HOSTS)),$(call nt_host,$(LD_FMT)))
+  $(call dce_host,$(LD_FMT))
 endef
 
 export do_autoconf

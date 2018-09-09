@@ -662,6 +662,13 @@ void lkl_qdisc_parse_add(int ifindex, char *entries);
 int lkl_sysctl(const char *path, const char *value);
 
 /**
+ * lkl_sysctl - read a sysctl value
+ *
+ * @path - the path to an sysctl entry (e.g., "net.ipv4.tcp_wmem");
+ */
+int lkl_sysctl_get(const char *path, char *buffer, int size);
+
+/**
  * lkl_sysctl_parse_write - Configure sysctl parameters with strings
  *
  * @sysctls - Configure sysctl parameters as the form of "key=value;..."

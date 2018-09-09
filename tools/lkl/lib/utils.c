@@ -240,6 +240,40 @@ int lkl_sysctl(const char *path, const char *value)
 	return 0;
 }
 
+int lkl_sysctl_get(const char *path, char *buffer, int size)
+{
+  int ret;
+  int fd;
+  char *delim, *p;
+  char full_path[256];
+  lkl_mount_fs("proc");
+
+  snprintf(full_path, sizeof(full_path), "/proc/sys/%s", path);
+  p = full_path;
+  while ((delim = strstr(p, "."))) {
+    *delim = '/';
+    p = delim + 1;
+  }
+
+  fd = lkl_sys_open(full_path, LKL_O_WRONLY | LKL_O_CREAT, 0);
+  if (fd < 0) {
+    lkl_printf("lkl_sys_open %s: %s\n",
+         full_path, lkl_strerror(fd));
+    return -1;
+  }
+
+  //TODO: need to verify significance of size
+  ret = lkl_sys_read(fd, buffer, size);
+  if (ret < 0) {
+    lkl_printf("lkl_sys_write %s: %s\n",
+      full_path, lkl_strerror(fd));
+  }
+
+  lkl_sys_close(fd);
+
+  return ret;
+}
+
 /* Configure sysctl parameters as the form of "key=value;key=value;..." */
 void lkl_sysctl_parse_write(const char *sysctls)
 {

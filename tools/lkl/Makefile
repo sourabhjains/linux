@@ -65,7 +65,7 @@ $(OUTPUT)lib/lkl.o: bin/stat
 	$(MAKE) -C ../.. ARCH=lkl $(KOPT) install INSTALL_PATH=$(OUTPUT)
 
 # rules to link libs
-$(OUTPUT)%$(SOSUF): LDFLAGS += -shared
+$(OUTPUT)%$(SOSUF): LDFLAGS += -shared -nodefaultlibs -nostdlib
 $(OUTPUT)%$(SOSUF): $(OUTPUT)%-in.o $(OUTPUT)liblkl.a
 	$(QUIET_LINK)$(CC) $(LDFLAGS) $(LDFLAGS_$*-y) -o $@ $^ $(LDLIBS) $(LDLIBS_$*-y)
 
@@ -85,6 +85,9 @@ $(OUTPUT)%-in.o: $(OUTPUT)lib/lkl.o FORCE
 
 $(OUTPUT)cpfromfs$(EXESUF): cptofs$(EXESUF)
 	$(Q)if ! [ -e $@ ]; then ln -s $< $@; fi
+
+
+#--------------extra targets, Not needed to build LKL-----------------------
 
 clean:
 	$(call QUIET_CLEAN, objects)find $(OUTPUT) -name '*.o' -delete -o -name '\.*.cmd'\

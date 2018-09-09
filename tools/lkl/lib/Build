@@ -1,4 +1,7 @@
 CFLAGS_posix-host.o += -D_FILE_OFFSET_BITS=64
+CFLAGS_dce_host.o += -D_FILE_OFFSET_BITS=64
+CFLAGS_dce_socket.o += -D_FILE_OFFSET_BITS=64
+CFLAGS_dce_device.o += -D_FILE_OFFSET_BITS=64
 CFLAGS_virtio_net_vde.o += $(pkg-config --cflags vdeplug 2>/dev/null)
 CFLAGS_nt-host.o += -D_WIN32_WINNT=0x0600
 
@@ -8,6 +11,9 @@ liblkl-y += net.o
 liblkl-y += jmp_buf.o
 liblkl-$(LKL_HOST_CONFIG_POSIX) += posix-host.o
 liblkl-$(LKL_HOST_CONFIG_NT) += nt-host.o
+liblkl-$(LKL_HOST_CONFIG_DCE) += dce_host.o
+liblkl-$(LKL_HOST_CONFIG_DCE) += dce_socket.o
+liblkl-$(LKL_HOST_CONFIG_DCE) += dce_device.o
 liblkl-y += utils.o
 liblkl-y += virtio_blk.o
 liblkl-y += virtio.o
