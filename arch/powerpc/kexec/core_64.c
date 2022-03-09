@@ -542,6 +542,75 @@ out:
 	return ret;
 }
 
+#ifdef CONFIG_CRASH_HOTPLUG
+#undef pr_fmt
+#define pr_fmt(fmt) "crash hp: " fmt
+
+/**
+ * arch_crash_handle_hotplug_event - Handle crash CPU/Memory hotplug events to update the
+ *				     necessary kexec segments based on the hotplug event.
+ * @image: a pointer to kexec_crash_image
+ * @arg: struct memory_notify handler for memory hotplug case and NULL for CPU hotplug case.
+ *
+ * Update the kdump image based on the type of hotplug event, represented by image->hp_action.
+ * CPU addition: Update the FDT segment to include the newly added CPU.
+ * CPU removal: No action is needed, with the assumption that it's okay to have offline CPUs
+ *		as part of the FDT.
+ * Memory addition/removal: No action is taken as this is not yet supported.
+ */
+void arch_crash_handle_hotplug_event(struct kimage *image, void *arg)
+{
+	unsigned int hp_action = image->hp_action;
+
+	/*
+	 * Since the hot-unplugged CPU is already part of crash FDT,
+	 * no action is needed for CPU remove case.
+	 */
+	if (hp_action == KEXEC_CRASH_HP_REMOVE_CPU) {
+		return;
+
+	} else if (hp_action == KEXEC_CRASH_HP_ADD_CPU) {
+
+		void *fdt, *ptr;
+		unsigned long mem;
+		int i, fdt_index = -1;
+
+		/* Find the FDT segment index in kexec segment array. */
+		for (i = 0; i < image->nr_segments; i++) {
+			mem = image->segment[i].mem;
+			ptr = __va(mem);
+
+			if (ptr && fdt_magic(ptr) == FDT_MAGIC) {
+				fdt_index = i;
+				break;
+			}
+		}
+
+		if (fdt_index < 0) {
+			pr_err("Unable to locate FDT segment.\n");
+			return;
+		}
+
+		fdt = __va((void *)image->segment[fdt_index].mem);
+
+		/* Temporarily invalidate the crash image while it is replaced */
+		xchg(&kexec_crash_image, NULL);
+
+		/* update FDT to refelect changes in CPU resrouces */
+		if (update_cpus_node(fdt))
+			pr_err("Failed to update crash FDT");
+
+		/* The crash image is now valid once again */
+		xchg(&kexec_crash_image, image);
+
+	} else if (hp_action == KEXEC_CRASH_HP_REMOVE_MEMORY ||
+		   hp_action == KEXEC_CRASH_HP_ADD_MEMORY) {
+		pr_info_once("Crash update is not supported for memory hotplug\n");
+		return;
+	}
+}
+#endif
+
 #ifdef CONFIG_PPC_64S_HASH_MMU
 /* Values we need to export to the second kernel via the device tree. */
 static __be64 htab_base;
