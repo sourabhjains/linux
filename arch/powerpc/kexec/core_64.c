@@ -574,6 +574,58 @@ out:
 	return ret;
 }
 
+#if defined(CONFIG_CRASH_HOTPLUG)
+#undef pr_fmt
+#define pr_fmt(fmt) "crash hp: " fmt
+
+/**
+ * arch_crash_hotplug_handler() - Handle crash CPU/Memory hotplug events to update the
+ *                                necessary kexec segments based on the hotplug event.
+ * @image: the active struct kimage
+ */
+void arch_crash_handle_hotplug_event(struct kimage *image)
+{
+	void *fdt;
+	int fdt_index;
+	unsigned int hp_action = image->hp_action;
+
+	/*
+	 * Since the hot-unplugged CPU is already part of crash FDT,
+	 * no action is needed for CPU remove case.
+	 */
+	if (hp_action == KEXEC_CRASH_HP_REMOVE_CPU)
+		return;
+
+	/* crash update on memory hotplug events is not supported yet */
+	if (hp_action == KEXEC_CRASH_HP_REMOVE_MEMORY || hp_action == KEXEC_CRASH_HP_ADD_MEMORY) {
+		pr_info_once("Crash update is not supported for memory hotplug\n");
+		return;
+	}
+
+	fdt_index = image->arch.fdt_index;
+	/* Must have valid FDT index, it is been discovered during
+	 * kdump kernel load for both kexec_load and kexec_file_load
+	 * system call.
+	 */
+	if (fdt_index < 0) {
+		pr_err("Invalid FDT index");
+		return;
+	}
+
+	fdt = __va((void *)image->segment[fdt_index].mem);
+
+	/* Temporarily invalidate the crash image while it is replaced */
+	xchg(&kexec_crash_image, NULL);
+
+	/* update FDT to refelect changes in CPU resrouces */
+	if (update_cpus_node(fdt))
+		pr_err("Failed to update crash FDT");
+
+	/* The crash image is now valid once again */
+	xchg(&kexec_crash_image, image);
+}
+#endif
+
 #ifdef CONFIG_PPC_64S_HASH_MMU
 /* Values we need to export to the second kernel via the device tree. */
 static unsigned long htab_base;
