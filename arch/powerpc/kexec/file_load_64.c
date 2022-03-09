@@ -855,45 +855,6 @@ out:
 }
 
 /**
- * get_cpu_node_size - Compute the size of a CPU node in the FDT.
- *                     This should be done only once and the value is stored in
- *                     a static variable.
- * Returns the max size of a CPU node in the FDT.
- */
-static unsigned int cpu_node_size(void)
-{
-	static unsigned int size;
-	struct device_node *dn;
-	struct property *pp;
-
-	/*
-	 * Don't compute it twice, we are assuming that the per CPU node size
-	 * doesn't change during the system's life.
-	 */
-	if (size)
-		return size;
-
-	dn = of_find_node_by_type(NULL, "cpu");
-	if (WARN_ON_ONCE(!dn)) {
-		// Unlikely to happen
-		return 0;
-	}
-
-	/*
-	 * We compute the sub node size for a CPU node, assuming it
-	 * will be the same for all.
-	 */
-	size += strlen(dn->name) + 5;
-	for_each_property_of_node(dn, pp) {
-		size += strlen(pp->name);
-		size += pp->length;
-	}
-
-	of_node_put(dn);
-	return size;
-}
-
-/**
  * kexec_extra_fdt_size_ppc64 - Return the estimated additional size needed to
  *                              setup FDT for kexec/kdump kernel.
  * @image:                      kexec image being loaded.

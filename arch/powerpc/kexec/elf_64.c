@@ -42,6 +42,9 @@ static void *elf64_load(struct kimage *image, char *kernel_buf,
 	struct kexec_buf pbuf = { .image = image, .buf_min = 0,
 				  .buf_max = ppc64_rma_size, .top_down = true,
 				  .mem = KEXEC_BUF_MEM_UNKNOWN };
+#if defined(CONFIG_CRASH_HOTPLUG)
+	unsigned int offline_core_count;
+#endif
 
 	ret = kexec_build_elf_info(kernel_buf, kernel_len, &ehdr, &elf_info);
 	if (ret)
@@ -119,10 +122,24 @@ static void *elf64_load(struct kimage *image, char *kernel_buf,
 	fdt_pack(fdt);
 
 	kbuf.buffer = fdt;
-	kbuf.bufsz = kbuf.memsz = fdt_totalsize(fdt);
+	kbuf.bufsz = fdt_totalsize(fdt);
 	kbuf.buf_align = PAGE_SIZE;
 	kbuf.top_down = true;
 	kbuf.mem = KEXEC_BUF_MEM_UNKNOWN;
+#if defined(CONFIG_CRASH_HOTPLUG)
+	if (image->type == KEXEC_TYPE_CRASH) {
+		/* Calculate the buffer space needed to accommodate more CPU nodes in
+		 * crash FDT post capture kernel load due to CPU hotplug events.
+		 */
+		offline_core_count = (num_possible_cpus() - num_present_cpus()) / threads_per_core;
+		kbuf.memsz = fdt_totalsize(fdt) + offline_core_count * cpu_node_size();
+		fdt_set_totalsize(fdt, kbuf.memsz);
+	} else
+#endif
+	{
+		kbuf.memsz = fdt_totalsize(fdt);
+	}
+
 	ret = kexec_add_buffer(&kbuf);
 	if (ret)
 		goto out_free_fdt;

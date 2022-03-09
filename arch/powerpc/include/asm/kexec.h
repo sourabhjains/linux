@@ -101,11 +101,16 @@ void kexec_copy_flush(struct kimage *image);
 
 #ifdef CONFIG_PPC64
 struct crash_mem;
+unsigned int cpu_node_size(void);
 int update_cpus_node(void *fdt);
 int get_crash_memory_ranges(struct crash_mem **mem_ranges);
 #if defined(CONFIG_CRASH_HOTPLUG)
 int machine_kexec_post_load(struct kimage *image);
 #define machine_kexec_post_load machine_kexec_post_load
+
+void arch_crash_handle_hotplug_event(struct kimage *image, unsigned int hp_action);
+#define arch_crash_handle_hotplug_event arch_crash_handle_hotplug_event
+
 #endif
 #endif
 

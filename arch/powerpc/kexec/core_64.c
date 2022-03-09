@@ -517,6 +517,45 @@ static int add_node_props(void *fdt, int node_offset, const struct device_node *
 }
 
 /**
+ * cpu_node_size - Compute the size of a CPU node in the FDT.
+ *                 This should be done only once and the value is stored in
+ *                 a static variable.
+ * Returns the max size of a CPU node in the FDT.
+ */
+unsigned int cpu_node_size(void)
+{
+	static unsigned int size;
+	struct device_node *dn;
+	struct property *pp;
+
+	/*
+	 * Don't compute it twice, we are assuming that the per CPU node size
+	 * doesn't change during the system's life.
+	 */
+	if (size)
+		return size;
+
+	dn = of_find_node_by_type(NULL, "cpu");
+	if (WARN_ON_ONCE(!dn)) {
+		// Unlikely to happen
+		return 0;
+	}
+
+	/*
+	 * We compute the sub node size for a CPU node, assuming it
+	 * will be the same for all.
+	 */
+	size += strlen(dn->name) + 5;
+	for_each_property_of_node(dn, pp) {
+		size += strlen(pp->name);
+		size += pp->length;
+	}
+
+	of_node_put(dn);
+	return size;
+}
+
+/**
  * update_cpus_node - Update cpus node of flattened device tree using of_root
  *                    device node.
  * @fdt:              Flattened device tree of the kernel.
@@ -575,6 +614,49 @@ out:
 	of_node_put(dn);
 	return ret;
 }
+
+#if defined(CONFIG_CRASH_HOTPLUG)
+/**
+ * arch_crash_hotplug_handler() - Handle hotplug kexec segements changes FDT, elfcorehdr
+ * @image: the active struct kimage
+ * @hp_action: the hot un/plug action being handled
+ *
+ * To accurately reflect CPU hot un/plug changes, the FDT must be updated with the
+ * new list of CPUs.
+ */
+void arch_crash_handle_hotplug_event(struct kimage *image, unsigned int hp_action)
+{
+	void *fdt;
+
+	/* No action needed for CPU hot-unplug */
+	if (hp_action == KEXEC_CRASH_HP_REMOVE_CPU)
+		return;
+
+	/* crash update on memory hotplug is not support yet */
+	if (hp_action == KEXEC_CRASH_HP_REMOVE_MEMORY || hp_action == KEXEC_CRASH_HP_ADD_MEMORY) {
+		pr_info_once("crash hp: crash update is not supported with memory hotplug\n");
+		return;
+	}
+
+	/* Must have valid FDT index */
+	if (image->arch.fdt_index < 0) {
+		pr_err("crash hp: unable to locate FDT segment");
+		return;
+	}
+
+	fdt = __va((void *)image->segment[image->arch.fdt_index].mem);
+
+	/* Temporarily invalidate the crash image while it is replaced */
+	xchg(&kexec_crash_image, NULL);
+
+	/* update FDT to refelect changes to CPU resrouces */
+	if (update_cpus_node(fdt))
+		pr_err("crash hp: failed to update crash FDT");
+
+	/* The crash image is now valid once again */
+	xchg(&kexec_crash_image, image);
+}
+#endif
 
 #ifdef CONFIG_PPC_64S_HASH_MMU
 /* Values we need to export to the second kernel via the device tree. */
