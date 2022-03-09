@@ -77,6 +77,37 @@ int machine_kexec_prepare(struct kimage *image)
 	return 0;
 }
 
+int machine_kexec_post_load(struct kimage *kimage)
+{
+#if defined(CONFIG_CRASH_HOTPLUG)
+	int i;
+	void *ptr;
+	unsigned long mem;
+
+	/* Mark fdt_index invalid */
+	kimage->arch.fdt_index = -1;
+
+	/* fdt_index remains invalid if it is not a crash kernel load */
+	if (kimage->type != KEXEC_TYPE_CRASH)
+		return 0;
+	/*
+	 * Find the FDT segment index in kexec segment array and
+	 * assign it to kimage's member fdt_index to enable direct
+	 * access to FDT segment later on.
+	 */
+	for (i = 0; i < kimage->nr_segments; i++) {
+		mem = kimage->segment[i].mem;
+		ptr = __va(mem);
+
+		if (ptr && fdt_magic(ptr) == FDT_MAGIC) {
+			kimage->arch.fdt_index = i;
+			break;
+		}
+	}
+#endif
+	return 0;
+}
+
 /* Called during kexec sequence with MMU off */
 static notrace void copy_segments(unsigned long ind)
 {
