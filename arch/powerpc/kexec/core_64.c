@@ -582,8 +582,9 @@ out:
  * arch_crash_hotplug_handler() - Handle crash CPU/Memory hotplug events to update the
  *                                necessary kexec segments based on the hotplug event.
  * @image: the active struct kimage
+ * @arg: struct memory_notify data handler for memory hotplug and NULL for CPU hotplug
  */
-void arch_crash_handle_hotplug_event(struct kimage *image)
+void arch_crash_handle_hotplug_event(struct kimage *image, void *arg)
 {
 	void *fdt;
 	int fdt_index;
