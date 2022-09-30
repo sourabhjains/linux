@@ -108,7 +108,7 @@ int get_crash_memory_ranges(struct crash_mem **mem_ranges);
 int machine_kexec_post_load(struct kimage *image);
 #define machine_kexec_post_load machine_kexec_post_load
 
-void arch_crash_handle_hotplug_event(struct kimage *image, unsigned int hp_action);
+void arch_crash_handle_hotplug_event(struct kimage *image, unsigned int hp_action, void *arg);
 #define arch_crash_handle_hotplug_event arch_crash_handle_hotplug_event
 
 #endif

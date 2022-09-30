@@ -620,11 +620,12 @@ out:
  * arch_crash_hotplug_handler() - Handle hotplug kexec segements changes FDT, elfcorehdr
  * @image: the active struct kimage
  * @hp_action: the hot un/plug action being handled
+ * @arg: struct memory_notify data handler
  *
  * To accurately reflect CPU hot un/plug changes, the FDT must be updated with the
  * new list of CPUs.
  */
-void arch_crash_handle_hotplug_event(struct kimage *image, unsigned int hp_action)
+void arch_crash_handle_hotplug_event(struct kimage *image, unsigned int hp_action, void *arg)
 {
 	void *fdt;
 

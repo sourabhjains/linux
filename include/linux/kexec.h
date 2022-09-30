@@ -509,7 +509,11 @@ static inline void arch_kexec_pre_free_pages(void *vaddr, unsigned int pages) { 
 #endif
 
 #ifndef arch_crash_handle_hotplug_event
-static inline void arch_crash_handle_hotplug_event(struct kimage *image, unsigned int hp_action) { }
+static inline void arch_crash_handle_hotplug_event(struct kimage *image,
+						   unsigned int hp_action,
+						   void *arg)
+{
+}
 #endif
 
 #else /* !CONFIG_KEXEC_CORE */
