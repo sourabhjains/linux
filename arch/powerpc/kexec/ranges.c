@@ -235,6 +235,66 @@ int add_mem_range(struct crash_mem **mem_ranges, u64 base, u64 size)
 }
 
 /**
+ * remove_mem_range - Removes the given memory range from the range list.
+ * @mem_ranges:    Range list to remove the memory range to.
+ * @base:          Base address of the range to remove.
+ * @size:          Size of the memory range to remove.
+ *
+ * (Re)allocates memory, if needed.
+ *
+ * Returns 0 on success, negative errno on error.
+ */
+int remove_mem_range(struct crash_mem **mem_ranges, u64 base, u64 size)
+{
+	int ret = 0;
+	unsigned int i;
+	struct crash_mem *mem_rngs = *mem_ranges;
+	u64 mstart, mend;
+	u64 range_start, range_end;
+
+	if (!size)
+		return 0;
+
+	range_start = base;
+	range_end = base + size - 1;
+
+	for (i = 0; i < mem_rngs->nr_ranges; i++) {
+		mstart = mem_rngs->ranges[i].start;
+		mend = mem_rngs->ranges[i].end;
+
+		if (!(range_start >= mstart && range_end <= mend))
+			continue;
+
+		if (range_start == mstart) {
+			if (range_end == mend) {
+				for (; i < mem_rngs->nr_ranges - 1; i++) {
+					mem_rngs->ranges[i].start = mem_rngs->ranges[i+1].start;
+					mem_rngs->ranges[i].end = mem_rngs->ranges[i+1].end;
+				}
+				mem_rngs->nr_ranges--;
+				goto out;
+			}
+			mem_rngs->ranges[i].start = range_end + 1;
+			goto out;
+		} else if (range_end == mend)  {
+			mem_rngs->ranges[i].end = range_start - 1;
+			goto out;
+		} else {
+			size = mem_rngs->ranges[i].end - range_end;
+			mem_rngs->ranges[i].end = range_start - 1;
+			if (add_mem_range(mem_ranges, range_end + 1, size))
+				goto error;
+			goto out;
+		}
+	}
+error:
+	return -1;
+
+out:
+	return ret;
+}
+
+/**
  * add_tce_mem_ranges - Adds tce-table range to the given memory ranges list.
  * @mem_ranges:         Range list to add the memory range(s) to.
  *

@@ -19,6 +19,7 @@
 #include <linux/of.h>
 #include <linux/libfdt.h>
 #include <linux/memblock.h>
+#include <linux/memory.h>
 
 #include <asm/page.h>
 #include <asm/current.h>
@@ -616,6 +617,60 @@ out:
 }
 
 #if defined(CONFIG_CRASH_HOTPLUG)
+int update_crash_elfcorehdr(struct kimage *image, unsigned int hp_action, void *arg)
+{
+	int ret;
+	struct crash_mem *cmem = NULL;
+	struct kexec_segment *ksegment;
+	unsigned long elfsz;
+	void *elfbuf = NULL;
+	void *mem;
+	unsigned long memsz;
+	char *ptr;
+	struct memory_notify *mn = (struct memory_notify *) arg;
+	unsigned long base_addr;
+	unsigned long size;
+
+	ksegment = &image->segment[image->elfcorehdr_index];
+	mem = (void *) ksegment->mem;
+	memsz = ksegment->memsz;
+
+	ret = get_crash_memory_ranges(&cmem);
+	if (ret) {
+		pr_err("crash hp: failed to get crash mem range\n");
+		return -1;
+	}
+
+	if (hp_action == KEXEC_CRASH_HP_REMOVE_MEMORY) {
+		base_addr = PFN_PHYS(mn->start_pfn);
+		size = mn->nr_pages * PAGE_SIZE;
+		ret = remove_mem_range(&cmem, base_addr, size);
+		if (ret)
+			return -1;
+	}
+
+	ret = crash_prepare_elf64_headers(image, cmem, false, &elfbuf, &elfsz);
+	if (ret) {
+		pr_err("crash hp: failed to prepare elf header\n");
+		return -1;
+	}
+
+	if (elfsz > memsz) {
+		pr_err("crash hp: updated crash elfcorehdr elfsz %lu > memsz %lu", elfsz, memsz);
+		return -1;
+	}
+
+	ptr = __va(mem);
+	if (ptr) {
+		xchg(&kexec_crash_image, NULL);
+		memcpy((void *)ptr, elfbuf, elfsz);
+		xchg(&kexec_crash_image, image);
+	}
+
+	vfree(elfbuf);
+	return 0;
+}
+
 /**
  * arch_crash_hotplug_handler() - Handle hotplug kexec segements changes FDT, elfcorehdr
  * @image: the active struct kimage
@@ -633,9 +688,8 @@ void arch_crash_handle_hotplug_event(struct kimage *image, unsigned int hp_actio
 	if (hp_action == KEXEC_CRASH_HP_REMOVE_CPU)
 		return;
 
-	/* crash update on memory hotplug is not support yet */
 	if (hp_action == KEXEC_CRASH_HP_REMOVE_MEMORY || hp_action == KEXEC_CRASH_HP_ADD_MEMORY) {
-		pr_info_once("crash hp: crash update is not supported with memory hotplug\n");
+		update_crash_elfcorehdr(image, hp_action, arg);
 		return;
 	}
 
@@ -650,7 +704,6 @@ void arch_crash_handle_hotplug_event(struct kimage *image, unsigned int hp_actio
 	/* Temporarily invalidate the crash image while it is replaced */
 	xchg(&kexec_crash_image, NULL);
 
-	/* update FDT to refelect changes to CPU resrouces */
 	if (update_cpus_node(fdt))
 		pr_err("crash hp: failed to update crash FDT");
 
