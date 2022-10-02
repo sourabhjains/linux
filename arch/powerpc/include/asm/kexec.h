@@ -112,6 +112,12 @@ void arch_crash_handle_hotplug_event(struct kimage *image, void *arg);
 static inline int crash_hotplug_cpu_support(void) { return 1; }
 #define crash_hotplug_cpu_support crash_hotplug_cpu_support
 #endif
+
+#ifdef CONFIG_MEMORY_HOTPLUG
+static inline int crash_hotplug_memory_support(void) { return 1; }
+#define crash_hotplug_memory_support crash_hotplug_memory_support
+#endif
+
 #endif
 #endif
 
