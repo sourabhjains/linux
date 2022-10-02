@@ -116,8 +116,11 @@ int get_crash_memory_ranges(struct crash_mem **mem_ranges);
 #ifdef CONFIG_CRASH_HOTPLUG
 void arch_crash_handle_hotplug_event(struct kimage *image, void *arg);
 #define arch_crash_handle_hotplug_event arch_crash_handle_hotplug_event
-#endif /* CONFIG_CRASH_HOTPLUG */
 
+unsigned int arch_crash_get_elfcorehdr_size(void);
+#define crash_get_elfcorehdr_size arch_crash_get_elfcorehdr_size
+
+#endif /* CONFIG_CRASH_HOTPLUG */
 #endif /* CONFIG_PPC64 */
 
 #ifdef CONFIG_KEXEC_FILE
