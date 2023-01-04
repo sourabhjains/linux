@@ -681,6 +681,18 @@ config CRASH_DUMP
 	  The same kernel binary can be used as production kernel and dump
 	  capture kernel.
 
+config CRASH_HOTPLUG
+	bool "In-kernel update to kdump kernel on system configuration changes"
+	default y
+	depends on CRASH_DUMP && (HOTPLUG_CPU || MEMORY_HOTPLUG)
+	help
+	  Quick and efficient mechanism to update the kdump kernel in the
+	  event of CPU/Memory hot plug/unplug or online/offline events. This
+	  approach does the in-kernel update to only necessary kexec segment
+	  instead of unload-reload entire kdump kernel from userspace.
+
+	  If unsure, say Y.
+
 config FA_DUMP
 	bool "Firmware-assisted dump"
 	depends on PPC64 && (PPC_RTAS || PPC_POWERNV)
