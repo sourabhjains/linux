@@ -277,6 +277,11 @@ struct kimage *do_kimage_alloc_init(void)
 	/* Initialize the list of unusable pages */
 	INIT_LIST_HEAD(&image->unusable_pages);
 
+#ifdef CONFIG_CRASH_HOTPLUG
+    image->elfcorehdr_index = -1;
+    image->elfcorehdr_updated = false;
+#endif
+
 	return image;
 }
 
