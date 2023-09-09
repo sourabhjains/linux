@@ -599,6 +599,12 @@ static void opal_fadump_trigger(struct fadump_crash_info_header *fdh,
 		pr_emerg("No backend support for MPIPL!\n");
 }
 
+static int opal_fadump_max_mem_regions(void)
+{
+	return FADUMP_MAX_MEM_REGS;
+
+}
+
 static struct fadump_ops opal_fadump_ops = {
 	.fadump_init_mem_struct		= opal_fadump_init_mem_struct,
 	.fadump_get_metadata_size	= opal_fadump_get_metadata_size,
@@ -611,6 +617,7 @@ static struct fadump_ops opal_fadump_ops = {
 	.fadump_process			= opal_fadump_process,
 	.fadump_region_show		= opal_fadump_region_show,
 	.fadump_trigger			= opal_fadump_trigger,
+	.fadump_max_mem_regions		= opal_fadump_max_mem_regions,
 };
 
 void __init opal_fadump_dt_scan(struct fw_dump *fadump_conf, u64 node)
