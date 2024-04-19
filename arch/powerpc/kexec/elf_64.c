@@ -36,6 +36,7 @@ static void *elf64_load(struct kimage *image, char *kernel_buf,
 	const void *slave_code;
 	struct elfhdr ehdr;
 	char *modified_cmdline = NULL;
+	struct crash_mem *rmem = NULL;
 	struct kexec_elf_info elf_info;
 	struct kexec_buf kbuf = { .image = image, .buf_min = 0,
 				  .buf_max = ppc64_rma_size };
@@ -102,17 +103,20 @@ static void *elf64_load(struct kimage *image, char *kernel_buf,
 		kexec_dprintk("Loaded initrd at 0x%lx\n", initrd_load_addr);
 	}
 
+	ret = get_reserved_memory_ranges(&rmem);
+	if (ret)
+		goto out;
+
 	fdt = of_kexec_alloc_and_setup_fdt(image, initrd_load_addr,
 					   initrd_len, cmdline,
-					   kexec_extra_fdt_size_ppc64(image));
+					   kexec_extra_fdt_size_ppc64(image, rmem));
 	if (!fdt) {
 		pr_err("Error setting up the new device tree.\n");
 		ret = -EINVAL;
 		goto out;
 	}
 
-	ret = setup_new_fdt_ppc64(image, fdt, initrd_load_addr,
-				  initrd_len, cmdline);
+	ret = setup_new_fdt_ppc64(image, fdt, rmem);
 	if (ret)
 		goto out_free_fdt;
 
@@ -145,6 +149,7 @@ static void *elf64_load(struct kimage *image, char *kernel_buf,
 out_free_fdt:
 	kvfree(fdt);
 out:
+	kfree(rmem);
 	kfree(modified_cmdline);
 	kexec_free_elf_info(&elf_info);
 
