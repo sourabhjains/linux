@@ -502,6 +502,9 @@ int crash_check_hotplug_support(void)
 {
 	int rc = 0;
 
+	if (kexec_in_progress)
+		return 0;
+
 	crash_hotplug_lock();
 	/* Obtain lock while reading crash information */
 	if (!kexec_trylock()) {
@@ -536,6 +539,9 @@ int crash_check_hotplug_support(void)
 static void crash_handle_hotplug_event(unsigned int hp_action, unsigned int cpu, void *arg)
 {
 	struct kimage *image;
+
+	if (kexec_in_progress)
+		return;
 
 	crash_hotplug_lock();
 	/* Obtain lock while changing crash information */
