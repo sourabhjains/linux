@@ -116,6 +116,7 @@ int setup_new_fdt_ppc64(const struct kimage *image, void *fdt, struct crash_mem 
 #ifdef CONFIG_CRASH_RESERVE
 int __init overlaps_crashkernel(unsigned long start, unsigned long size);
 extern void arch_reserve_crashkernel(void);
+unsigned long long __init get_crash_base(unsigned long long crash_base);
 #else
 static inline void arch_reserve_crashkernel(void) {}
 static inline int overlaps_crashkernel(unsigned long start, unsigned long size) { return 0; }
