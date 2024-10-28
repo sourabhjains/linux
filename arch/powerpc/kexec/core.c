@@ -59,7 +59,7 @@ void machine_kexec(struct kimage *image)
 
 #ifdef CONFIG_CRASH_RESERVE
 
-static unsigned long long __init get_crash_base(unsigned long long crash_base)
+unsigned long long __init get_crash_base(unsigned long long crash_base)
 {
 
 #ifndef CONFIG_NONSTATIC_KERNEL
@@ -101,33 +101,45 @@ static unsigned long long __init get_crash_base(unsigned long long crash_base)
 
 void __init arch_reserve_crashkernel(void)
 {
-	unsigned long long crash_size, crash_base, crash_end;
+	unsigned long long crash_size, crash_base, crash_end, low_size = 0;
 	unsigned long long kernel_start, kernel_size;
 	unsigned long long total_mem_sz;
+	bool high = false;
 	int ret;
 
 	total_mem_sz = memory_limit ? memory_limit : memblock_phys_mem_size();
 
 	/* use common parsing */
 	ret = parse_crashkernel(boot_command_line, total_mem_sz, &crash_size,
-				&crash_base, NULL, NULL, NULL);
+				&crash_base, &low_size, NULL, &high);
 
 	if (ret)
 		return;
 
-	crash_base = get_crash_base(crash_base);
-	crash_end = crash_base + crash_size - 1;
-
-	kernel_start = __pa(_stext);
-	kernel_size = _end - _stext;
-
-	/* The crash region must not overlap the current kernel */
-	if ((kernel_start + kernel_size > crash_base) && (kernel_start <= crash_end)) {
-		pr_warn("Crash kernel can not overlap current kernel\n");
-		return;
+	/* TODO Fix needed early_radix_enabled may not give correct result at this of the boot */
+	if (!early_radix_enabled()) {
+		high = false;
+		low_size = 0;
+		pr_warn("High crashkernel unsupported on HASH, using standard reservation");
 	}
 
-	reserve_crashkernel_generic(crash_size, crash_base, 0, false);
+	if (high) {
+		crash_base = 0;
+	} else {
+		crash_base = get_crash_base(crash_base);
+		crash_end = crash_base + crash_size - 1;
+
+		kernel_start = __pa(_stext);
+		kernel_size = _end - _stext;
+
+		/* The crash region must not overlap the current kernel */
+		if ((kernel_start + kernel_size > crash_base) && (kernel_start <= crash_end)) {
+			printk(KERN_WARNING "Crash kernel can not overlap current kernel\n");
+			return;
+		}
+	}
+
+	reserve_crashkernel_generic(crash_size, crash_base, low_size, high);
 }
 
 int __init overlaps_crashkernel(unsigned long start, unsigned long size)
