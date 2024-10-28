@@ -357,7 +357,8 @@ static int __init reserve_crashkernel_low(unsigned long long low_size)
 #ifdef CONFIG_64BIT
 	unsigned long long low_base;
 
-	low_base = memblock_phys_alloc_range(low_size, CRASH_ALIGN, 0, CRASH_ADDR_LOW_MAX);
+	/* TODO replace SZ_256M constant */
+	low_base = memblock_phys_alloc_range(low_size, CRASH_ALIGN, SZ_256M, CRASH_ADDR_LOW_MAX);
 	if (!low_base) {
 		pr_err("cannot allocate crashkernel low memory (size:0x%llx).\n", low_size);
 		return -ENOMEM;

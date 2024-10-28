@@ -81,7 +81,7 @@ void machine_kexec(struct kimage *image)
 
 #ifdef CONFIG_CRASH_RESERVE
 
-static unsigned long long __init get_crash_base(unsigned long long crash_base)
+unsigned long long __init get_crash_base(unsigned long long crash_base)
 {
 
 #ifndef CONFIG_NONSTATIC_KERNEL
@@ -123,30 +123,35 @@ static unsigned long long __init get_crash_base(unsigned long long crash_base)
 
 void __init arch_reserve_crashkernel(void)
 {
-	unsigned long long crash_size, crash_base, crash_end;
+	unsigned long long crash_size, crash_base, crash_end, low_size = 0;
 	unsigned long long kernel_start, kernel_size;
+	bool high = false;
 	int ret;
 
 	/* use common parsing */
 	ret = parse_crashkernel(boot_command_line, memblock_phys_mem_size(),
-				&crash_size, &crash_base, NULL, NULL);
+				&crash_size, &crash_base, &low_size, &high);
 
 	if (ret)
 		return;
 
-	crash_base = get_crash_base(crash_base);
-	crash_end = crash_base + crash_size - 1;
+	if (high) {
+		crash_base = 0;
+	} else {
+		crash_base = get_crash_base(crash_base);
+		crash_end = crash_base + crash_size - 1;
 
-	kernel_start = __pa(_stext);
-	kernel_size = _end - _stext;
+		kernel_start = __pa(_stext);
+		kernel_size = _end - _stext;
 
-	/* The crash region must not overlap the current kernel */
-	if ((kernel_start + kernel_size > crash_base) && (kernel_start <= crash_end)) {
-		printk(KERN_WARNING "Crash kernel can not overlap current kernel\n");
-		return;
+		/* The crash region must not overlap the current kernel */
+		if ((kernel_start + kernel_size > crash_base) && (kernel_start <= crash_end)) {
+			printk(KERN_WARNING "Crash kernel can not overlap current kernel\n");
+			return;
+		}
 	}
 
-	reserve_crashkernel_generic(crash_size, crash_base, 0, false);
+	reserve_crashkernel_generic(crash_size, crash_base, low_size, high);
 }
 
 int __init overlaps_crashkernel(unsigned long start, unsigned long size)
