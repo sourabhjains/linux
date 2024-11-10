@@ -458,6 +458,7 @@ retry:
 #endif
 }
 
+/*
 #ifndef HAVE_ARCH_ADD_CRASH_RES_TO_IOMEM_EARLY
 static __init int insert_crashkernel_resources(void)
 {
@@ -471,4 +472,5 @@ static __init int insert_crashkernel_resources(void)
 }
 early_initcall(insert_crashkernel_resources);
 #endif
+*/
 #endif
