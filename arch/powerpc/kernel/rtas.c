@@ -33,6 +33,7 @@
 #include <linux/uaccess.h>
 #include <linux/xarray.h>
 
+#include <asm/kexec.h>
 #include <asm/delay.h>
 #include <asm/firmware.h>
 #include <asm/interrupt.h>
@@ -545,6 +546,7 @@ static struct rtas_function rtas_function_table[] __ro_after_init = {
  */
 static DEFINE_RAW_SPINLOCK(rtas_lock);
 static struct rtas_args rtas_args;
+static struct rtas_args *rtas_low_args;
 
 /**
  * rtas_function_token() - RTAS function token lookup.
@@ -669,9 +671,20 @@ static const struct rtas_function *rtas_token_to_function(s32 token)
 /* This is here deliberately so it's only used in this file */
 void enter_rtas(unsigned long);
 
+static void enter_rtas_wrap(struct rtas_args *args)
+{
+	memcpy(rtas_low_args, args, sizeof(struct rtas_args));
+	enter_rtas(__pa(rtas_low_args));
+	memcpy(args, rtas_low_args, sizeof(struct rtas_args));
+}
+
 static void __do_enter_rtas(struct rtas_args *args)
 {
-	enter_rtas(__pa(args));
+	if (is_kdump_kernel()) {
+		enter_rtas_wrap(args);
+	} else {
+		enter_rtas(__pa(args));
+	}
 	srr_regs_clobbered(); /* rtas uses SRRs, invalidate */
 }
 
@@ -2114,6 +2127,10 @@ void __init rtas_initialize(void)
 	if (!rtas_rmo_buf)
 		panic("ERROR: RTAS: Failed to allocate %lx bytes below %pa\n",
 		      PAGE_SIZE, &rtas_region);
+
+	rtas_low_args = (struct rtas_args *) memblock_phys_alloc_range(sizeof(struct rtas_args), SZ_8, 0, rtas_region);
+	if (!rtas_low_args)
+		panic("ERROR: RTAS args allocation failed\n");
 
 	rtas_work_area_reserve_arena(rtas_region);
 }
