@@ -558,8 +558,12 @@ static int kexec_walk_memblock(struct kexec_buf *kbuf,
 	struct resource res = { };
 
 #ifdef CONFIG_CRASH_DUMP
-	if (kbuf->image->type == KEXEC_TYPE_CRASH)
+	if (kbuf->image->type == KEXEC_TYPE_CRASH) {
+		if (crashk_low_res.end)
+			return func(&crashk_res, kbuf);
+
 		return func(&crashk_res, kbuf);
+	}
 #endif
 
 	/*
