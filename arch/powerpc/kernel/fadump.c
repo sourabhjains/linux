@@ -11,7 +11,7 @@
  * Author: Mahesh Salgaonkar <mahesh@linux.vnet.ibm.com>
  */
 
-#undef DEBUG
+#def DEBUG
 #define pr_fmt(fmt) "fadump: " fmt
 
 #include <linux/string.h>
