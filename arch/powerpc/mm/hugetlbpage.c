@@ -138,6 +138,9 @@ bool __init arch_hugetlb_valid_size(unsigned long size)
 	int shift = __ffs(size);
 	int mmu_psize;
 
+	if (!hugepages_supported())
+		return false;
+
 	/* Check that it is a page size supported by the hardware and
 	 * that it fits within pagetable and slice limits. */
 	if (size <= PAGE_SIZE || !is_power_of_2(size))
