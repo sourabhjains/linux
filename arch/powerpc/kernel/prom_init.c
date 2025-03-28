@@ -1868,7 +1868,7 @@ static void __init prom_instantiate_rtas(void)
 	prom_printf("instantiating rtas at 0x%x...", base);
 
 	if (call_prom_ret("call-method", 3, 2, &entry,
-			  ADDR("instantiate-rtas"),
+			  ADDR("instantiate-rtas-64"),
 			  rtas_inst, base) != 0
 	    || entry == 0) {
 		prom_printf(" failed\n");
