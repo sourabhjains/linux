@@ -125,6 +125,7 @@ static int add_usable_mem(struct umem_info *um_info, u64 base, u64 end)
 			if (!check_realloc_usable_mem(um_info, 2))
 				return -ENOMEM;
 
+			kexec_dprintk("loc base: 0x%016llx  size: %lld\n", loc_base, (loc_end - loc_base + 1));
 			um_info->buf[um_info->idx++] = cpu_to_be64(loc_base);
 			um_info->buf[um_info->idx++] =
 					cpu_to_be64(loc_end - loc_base + 1);
@@ -298,6 +299,7 @@ static int update_usable_mem_fdt(void *fdt, struct crash_mem *usable_mem)
 
 	dn = of_find_node_by_path("/ibm,dynamic-reconfiguration-memory");
 	if (dn) {
+		kexec_dprintk("About to setup drconf-usable memory\n");
 		ret = walk_drmem_lmbs(dn, &um_info, kdump_setup_usable_lmb);
 		of_node_put(dn);
 
@@ -320,6 +322,7 @@ static int update_usable_mem_fdt(void *fdt, struct crash_mem *usable_mem)
 	 * for the corresponding node in kdump kernel's fdt.
 	 */
 	for_each_node_by_type(dn, "memory") {
+		kexec_dprintk("About to setup memory@\n");
 		ret = add_usable_mem_property(fdt, dn, &um_info);
 		if (ret) {
 			pr_err("Failed to set linux,usable-memory property for %s node",
@@ -763,20 +766,23 @@ int setup_new_fdt_ppc64(const struct kimage *image, void *fdt, struct crash_mem 
 
 		if (crashk_low_res.end) {
 			ret = fdt_add_mem_rsv(fdt, BACKUP_SRC_END + 1,
-				      crashk_low_res.start);
+				      crashk_low_res.start - BACKUP_SRC_SIZE);
+			kexec_dprintk("mem reserve: start: 0x%016llx size: %lld\n", BACKUP_SRC_END+1, crashk_low_res.start - BACKUP_SRC_SIZE);
+
 			if (ret) {
 				pr_err("Error reserving crash memory: %s\n",
 					fdt_strerror(ret));
 				goto out;
 			}
 
-			ret = fdt_add_mem_rsv(fdt, crashk_low_res.end + 1,
-				      crashk_res.start - BACKUP_SRC_SIZE);
+			ret = fdt_add_mem_rsv(fdt, crashk_low_res.end + 1, crashk_res.start - crashk_low_res.end - 1);
+
 			if (ret) {
 				pr_err("Error reserving crash memory: %s\n",
 					fdt_strerror(ret));
 				goto out;
 			}
+			kexec_dprintk("mem reserve: start: 0x%016llx size: %lld\n", crashk_low_res.end+1, crashk_res.start - crashk_low_res.end - 1);
 		} else {
 			/*
 			 * Ensure we don't touch crashed kernel's memory except the
@@ -784,6 +790,8 @@ int setup_new_fdt_ppc64(const struct kimage *image, void *fdt, struct crash_mem 
 			 */
 			ret = fdt_add_mem_rsv(fdt, BACKUP_SRC_END + 1,
 				      crashk_res.start - BACKUP_SRC_SIZE);
+
+			kexec_dprintk("mem reserve: start: 0x%016llx size: %lld\n", BACKUP_SRC_SIZE + 1, crashk_res.start - BACKUP_SRC_SIZE);
 			if (ret) {
 				pr_err("Error reserving crash memory: %s\n",
 				fdt_strerror(ret));
@@ -794,6 +802,7 @@ int setup_new_fdt_ppc64(const struct kimage *image, void *fdt, struct crash_mem 
 		/* Ensure backup region is not used by kdump/capture kernel */
 		ret = fdt_add_mem_rsv(fdt, image->arch.backup_start,
 				      BACKUP_SRC_SIZE);
+		kexec_dprintk("mem reserve: start: 0x%016llx size: %lld\n", image->arch.backup_start, BACKUP_SRC_SIZE);
 		if (ret) {
 			pr_err("Error reserving memory for backup: %s\n",
 			       fdt_strerror(ret));
@@ -823,6 +832,7 @@ int setup_new_fdt_ppc64(const struct kimage *image, void *fdt, struct crash_mem 
 		base = rmem->ranges[i].start;
 		size = rmem->ranges[i].end - base + 1;
 		ret = fdt_add_mem_rsv(fdt, base, size);
+		kexec_dprintk("mem reserve: start: 0x%016llx %lld\n", base, size);
 		if (ret) {
 			pr_err("Error updating memory reserve map: %s\n",
 			       fdt_strerror(ret));

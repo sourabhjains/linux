@@ -528,15 +528,16 @@ int get_usable_memory_ranges(struct crash_mem **mem_ranges)
                 ret = add_mem_range(mem_ranges, 0, crashk_low_res.end + 1);
                 if (ret)
                         goto out;
-                pr_err("added usable mem_ranges start: %d end %lld\n", 0, crashk_low_res.end+1);
+                pr_err("added usable mem_ranges start: 0x%016llx end 0x%016llx\n", 0, crashk_low_res.end+1);
                 ret = add_mem_range(mem_ranges, crashk_res.start, crashk_res.end - crashk_res.start + 1);
                 if (ret)
                         goto out;
-                pr_err("added usable mem_ranges start: %lld end %lld\n", crashk_res.start, crashk_res.end+1);
+                pr_err("added usable mem_ranges start: 0x%016llx end 0x%016llx\n", crashk_res.start, crashk_res.end+1);
         } else {
                 ret = add_mem_range(mem_ranges, 0, crashk_res.end + 1);
                 if (ret)
                         goto out;
+                pr_err("added usable mem_ranges start: 0x%016llx end 0x%016llx\n", 0, crashk_res.end+1);
         }
 
 	ret = add_rtas_mem_range(mem_ranges);
