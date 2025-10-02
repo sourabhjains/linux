@@ -45,6 +45,8 @@
 #include <asm/trace.h>
 #include <asm/udbg.h>
 
+int rtas_64 = 1;
+
 struct rtas_filter {
 	/* Indexes into the args buffer, -1 if not used */
 	const int buf_idx1;
@@ -2003,6 +2005,7 @@ void __init rtas_initialize(void)
 	unsigned long rtas_region = RTAS_INSTANTIATE_MAX;
 	u32 base, size, entry;
 	int no_base, no_size, no_entry;
+	int val, ret;
 
 	/* Get RTAS dev node and fill up our "rtas" structure with infos
 	 * about it.
@@ -2018,6 +2021,12 @@ void __init rtas_initialize(void)
 		rtas.dev = NULL;
 		return;
 	}
+
+	ret = of_property_read_u32(rtas.dev, "linux,rtas-64", &val);
+	if (!ret && val)
+		pr_debug("RTAS 64-bit is initialized\n");
+	else
+		rtas_64 = 0;
 
 	rtas.base = base;
 	rtas.size = size;
