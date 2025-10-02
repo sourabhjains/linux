@@ -45,6 +45,8 @@
 #include <asm/trace.h>
 #include <asm/udbg.h>
 
+int rtas_64 = 1;
+
 struct rtas_filter {
 	/* Indexes into the args buffer, -1 if not used */
 	const int buf_idx1;
@@ -2086,6 +2088,9 @@ int __init early_init_dt_scan_rtas(unsigned long node,
 	basep  = of_get_flat_dt_prop(node, "linux,rtas-base", NULL);
 	entryp = of_get_flat_dt_prop(node, "linux,rtas-entry", NULL);
 	sizep  = of_get_flat_dt_prop(node, "rtas-size", NULL);
+
+	if (!of_get_flat_dt_prop(node, "linux,rtas-64", NULL))
+		rtas_64 = 0;
 
 #ifdef CONFIG_PPC64
 	/* need this feature to decide the crashkernel offset */

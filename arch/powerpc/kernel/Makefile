@@ -56,6 +56,7 @@ KCSAN_SANITIZE_cputable.o := n
 KCSAN_SANITIZE_btext.o := n
 KCSAN_SANITIZE_paca.o := n
 KCSAN_SANITIZE_setup_64.o := n
+KCSAN_SANITIZE_misc_$(BITS).o := n
 
 #ifdef CONFIG_RANDOMIZE_KSTACK_OFFSET
 # Remove stack protector to avoid triggering unneeded stack canary
