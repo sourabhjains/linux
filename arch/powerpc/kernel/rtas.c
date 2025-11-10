@@ -695,9 +695,83 @@ static const struct rtas_function *rtas_token_to_function(s32 token)
 /* This is here deliberately so it's only used in this file */
 void enter_rtas(unsigned long);
 
+static struct rtas_args_64 rtas_args_64;
+
+static void populate_rtas_args_64(struct rtas_args *args)
+{
+	int i;
+	u32 args_32_le;
+	u64 args_64_le;
+
+
+	rtas_args_64.token = cpu_to_be64((u64)be32_to_cpu(args->token));
+	rtas_args_64.nargs = cpu_to_be64((u64)be32_to_cpu(args->nargs));
+	rtas_args_64.nret  = cpu_to_be64((u64)be32_to_cpu(args->nret));
+	rtas_args_64.rets  = &rtas_args_64.args[be32_to_cpu(args->nargs)];
+
+
+	for (i = 0; i < be32_to_cpu(args->nargs); ++i)
+		rtas_args_64.args[i] = cpu_to_be64((u64)be32_to_cpu(args->args[i]));
+
+	for (i = 0; i < be32_to_cpu(args->nret); ++i)
+		rtas_args_64.rets[i] = 0;
+
+	args_32_le = be32_to_cpu(args->token);
+	args_64_le = be64_to_cpu(rtas_args_64.token);
+	pr_err("LE -> toke-32 = 0x%x, token-64 = 0x%llx\n", args_32_le, args_64_le);
+
+	args_32_le = be32_to_cpu(args->nargs);
+	args_64_le = be64_to_cpu(rtas_args_64.nargs);
+	pr_err("LE -> nargs-32 = 0x%x, nargs-64 = 0x%llx\n", args_32_le, args_64_le);
+
+	args_32_le = be32_to_cpu(args->nret);
+	args_64_le = be64_to_cpu(rtas_args_64.nret);
+	pr_err("LE -> nret-32 = 0x%x, nret-64 = 0x%llx\n", args_32_le, args_64_le);
+
+	for (i = 0; i < be32_to_cpu(args->nargs); ++i) {
+		args_32_le = be32_to_cpu(args->args[i]);
+		args_64_le = be64_to_cpu(rtas_args_64.args[i]);
+		pr_err("LE -> args[%d]-32 = 0x%x, args[%d]-64 = 0x%llx\n", i, i, args_32_le, args_64_le);
+	}
+
+}
+
+static void rtas_args_copy_64_32(struct rtas_args *args)
+{
+	int i;
+	u32 args_32_le;
+	u64 args_64_le;
+
+	args_32_le = be32_to_cpu(args->token);
+	args_64_le = be64_to_cpu(rtas_args_64.token);
+	pr_err("LE -> toke-32 = 0x%x, token-64 = 0x%llx\n", args_32_le, args_64_le);
+
+	args_32_le = be32_to_cpu(args->nargs);
+	args_64_le = be64_to_cpu(rtas_args_64.nargs);
+	pr_err("LE -> nargs-32 = 0x%x, nargs-64 = 0x%llx\n", args_32_le, args_64_le);
+
+	args_32_le = be32_to_cpu(args->nret);
+	args_64_le = be64_to_cpu(rtas_args_64.nret);
+	pr_err("LE -> nret-32 = 0x%x, nret-64 = 0x%llx\n", args_32_le, args_64_le);
+
+	for (i = 0; i < be32_to_cpu(args->nargs); ++i) {
+		args_32_le = be32_to_cpu(args->args[i]);
+		args_64_le = be64_to_cpu(rtas_args_64.args[i]);
+		pr_err("LE -> args[%d]-32 = 0x%x, args[%d]-64 = 0x%llx\n", i, i, args_32_le, args_64_le);
+	}
+
+	for (i = 0; i < (u32) be64_to_cpu(rtas_args_64.nret); ++i) {
+		args->rets[i] = cpu_to_be32((u32)be64_to_cpu(rtas_args_64.rets[i]));
+		pr_err("args->rets[%d]-32 = 0x%x\n", i, be32_to_cpu(args->rets[i]));
+
+	}
+}
+
 static void __do_enter_rtas(struct rtas_args *args)
 {
-	enter_rtas(__pa(args));
+	populate_rtas_args_64(args);
+	enter_rtas(__pa(&rtas_args_64));
+	rtas_args_copy_64_32(args);
 	srr_regs_clobbered(); /* rtas uses SRRs, invalidate */
 }
 

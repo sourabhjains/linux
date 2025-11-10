@@ -1890,6 +1890,11 @@ static void __init prom_instantiate_rtas(void)
 	}
 	prom_printf(" done\n");
 
+	if (rtas_64)
+		prom_printf("64-bit RTAS instantiated\n");
+	else
+		prom_printf("32-bit RTAS instantiated\n");
+
 	reserve_mem(base, size);
 
 	val = cpu_to_be32(base);

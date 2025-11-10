@@ -65,7 +65,7 @@ void machine_kexec(struct kimage *image)
 
 static unsigned long long crashk_cma_size;
 
-static unsigned long long __init get_crash_base(unsigned long long crash_base)
+unsigned long long __init get_crash_base(unsigned long long crash_base)
 {
 
 #ifndef CONFIG_NONSTATIC_KERNEL
@@ -126,7 +126,7 @@ void __init arch_reserve_crashkernel(void)
 
 	/* use common parsing */
 	ret = parse_crashkernel(boot_command_line, total_mem_sz, &crash_size,
-				&crash_base, &low_size, &cma_size, &high);
+				&crash_base, &low_size, &crashk_cma_size, &high);
 
 	if (ret)
 		return;
