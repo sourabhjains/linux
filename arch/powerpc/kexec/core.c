@@ -175,7 +175,7 @@ static struct property memory_limit_prop = {
 
 #define cpu_to_be_ulong	__PASTE(cpu_to_be, BITS_PER_LONG)
 
-static void __init export_crashk_values(struct device_node *node)
+static void export_crashk_values(struct device_node *node)
 {
 	/* There might be existing crash kernel properties, but we can't
 	 * be sure what's in them, so remove them. */
@@ -197,6 +197,18 @@ static void __init export_crashk_values(struct device_node *node)
 	 */
 	mem_limit = cpu_to_be_ulong(memory_limit);
 	of_update_property(node, &memory_limit_prop);
+}
+
+void arch_crashk_shrink_handle(void)
+{
+	struct device_node *node;
+
+	node = of_find_node_by_path("/chosen");
+	if (!node)
+		return;
+
+	export_crashk_values(node);
+	of_node_put(node);
 }
 
 static int __init kexec_setup(void)

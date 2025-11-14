@@ -45,6 +45,10 @@ static inline int crash_load_dm_crypt_keys(struct kimage *image) {return 0; }
 static inline void arch_crash_handle_hotplug_event(struct kimage *image, void *arg) { }
 #endif
 
+#ifndef arch_crashk_shrink_handle
+static inline void arch_crashk_shrink_handle(void) { }
+#endif
+
 int crash_check_hotplug_support(void);
 
 #ifndef arch_crash_hotplug_support

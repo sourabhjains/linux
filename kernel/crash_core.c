@@ -431,6 +431,8 @@ int crash_shrink_memory(unsigned long new_size)
 		insert_resource(&iomem_resource, &crashk_res);
 	}
 
+	arch_crashk_shrink_handle();
+
 unlock:
 	kexec_unlock();
 	return ret;
