@@ -214,7 +214,7 @@ static int __init kexec_setup(void)
 						  NULL));
 
 	/* information needed by userspace when using default_machine_kexec */
-	kernel_end = cpu_to_be_ulong(__pa(_end));
+	kernel_end = (__force phys_addr_t) cpu_to_be_ulong(__pa(_end));
 	of_add_property(node, &kernel_end_prop);
 
 #ifdef CONFIG_CRASH_RESERVE
