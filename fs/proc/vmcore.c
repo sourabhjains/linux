@@ -1137,6 +1137,7 @@ static int __init process_ptload_program_headers_elf64(char *elfptr,
 		paddr = phdr_ptr->p_offset;
 		start = rounddown(paddr, PAGE_SIZE);
 		end = roundup(paddr + phdr_ptr->p_memsz, PAGE_SIZE);
+		pr_err("paddr: %llx start: %llx, end: %llx\n", paddr, start, end);
 		size = end - start;
 
 		if (vmcore_alloc_add_range(vc_list, start, size))
@@ -1210,6 +1211,60 @@ static void free_elfcorebuf(void)
 	elfnotes_buf = NULL;
 }
 
+static void print_elf_header(char *ptr)
+{
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)ptr;
+    Elf64_Phdr *phdr;
+    int i;
+    int pt_load_count = 0;
+    int pt_note_count = 0;
+
+
+    if (!ehdr) {
+        pr_err("Error: NULL pointer provided\n");
+        return;
+    }
+
+    /* Get pointer to program headers */
+    phdr = (Elf64_Phdr *)((char *)ehdr + ehdr->e_phoff);
+    /* Count PT_LOAD and PT_NOTE segments */
+    for (i = 0; i < ehdr->e_phnum; i++) {
+        if (phdr[i].p_type == PT_LOAD) {
+            pt_load_count++;
+        } else if (phdr[i].p_type == PT_NOTE) {
+            pt_note_count++;
+        }
+    }
+
+    /* Print summary */
+    pr_err("ELF Program Header Summary:\n");
+    pr_err("  Total Program Headers: %d (0x%x)\n", ehdr->e_phnum, ehdr->e_phnum);
+    pr_err("  PT_LOAD segments:      %d (0x%x)\n", pt_load_count, pt_load_count);
+    pr_err("  PT_NOTE segments:      %d (0x%x)\n\n", pt_note_count, pt_note_count);
+
+    pr_err("PT_LOAD Segments:\n");
+    pr_err("%-5s %-18s %-18s %-18s %-18s %-18s %-18s %-8s\n",
+           "Index", "Type", "Offset", "VirtAddr", "PhysAddr", "FileSize", "MemSize", "Flags");
+    pr_err("============================================================================================\n");
+
+    /* Iterate through program headers */
+    for (i = 0; i < ehdr->e_phnum; i++) {
+        if (phdr[i].p_type == PT_LOAD) {
+            pr_err("0x%-3x %-18s 0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx %c%c%c\n",
+                   i,
+                   "PT_LOAD",
+                   phdr[i].p_offset,
+                   phdr[i].p_vaddr,
+                   phdr[i].p_paddr,
+                   phdr[i].p_filesz,
+                   phdr[i].p_memsz,
+                   (phdr[i].p_flags & PF_R) ? 'R' : '-',
+                   (phdr[i].p_flags & PF_W) ? 'W' : '-',
+                   (phdr[i].p_flags & PF_X) ? 'X' : '-');
+        }
+    }
+}
+
 static int __init parse_crash_elf64_headers(void)
 {
 	int rc=0;
@@ -1250,6 +1305,8 @@ static int __init parse_crash_elf64_headers(void)
 	if (rc < 0)
 		goto fail;
 
+
+	print_elf_header(elfcorebuf);
 	/* Merge all PT_NOTE headers into one. */
 	rc = merge_note_headers_elf64(elfcorebuf, &elfcorebuf_sz,
 				      &elfnotes_buf, &elfnotes_sz);

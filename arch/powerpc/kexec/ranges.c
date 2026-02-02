@@ -718,7 +718,7 @@ int remove_mem_range(struct crash_mem **mem_ranges, u64 base, u64 size)
 		 * two half.
 		 */
 		else {
-			size = mem_rngs->ranges[i].end - end + 1;
+			size = mem_rngs->ranges[i].end - end;
 			mem_rngs->ranges[i].end = base - 1;
 			ret = add_mem_range(mem_ranges, end + 1, size);
 		}

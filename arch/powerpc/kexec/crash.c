@@ -420,6 +420,67 @@ unsigned int arch_crash_get_elfcorehdr_size(void)
 }
 
 /**
+ * print_elf_header - Print PT_LOAD segments from ELF64 header
+ * @ptr: void pointer to Elf64_Ehdr structure
+ *
+ * This function takes a void pointer that points to an Elf64_Ehdr structure
+ * and prints all PT_LOAD program headers.
+ */
+static void print_elf_header(void *ptr)
+{
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)ptr;
+    Elf64_Phdr *phdr;
+    int i;
+        int pt_load_count = 0;
+    int pt_note_count = 0;
+
+    if (!ehdr) {
+        pr_err("Error: NULL pointer provided\n");
+        return;
+    }
+
+    /* Get pointer to program headers */
+    phdr = (Elf64_Phdr *)((char *)ehdr + ehdr->e_phoff);
+        /* Count PT_LOAD and PT_NOTE segments */
+    for (i = 0; i < ehdr->e_phnum; i++) {
+        if (phdr[i].p_type == PT_LOAD) {
+            pt_load_count++;
+        } else if (phdr[i].p_type == PT_NOTE) {
+            pt_note_count++;
+        }
+    }
+
+    /* Print summary */
+    pr_err("ELF Program Header Summary:\n");
+    pr_err("  Total Program Headers: %d (0x%x)\n", ehdr->e_phnum, ehdr->e_phnum);
+    pr_err("  PT_LOAD segments:      %d (0x%x)\n", pt_load_count, pt_load_count);
+    pr_err("  PT_NOTE segments:      %d (0x%x)\n\n", pt_note_count, pt_note_count);
+
+
+    pr_err("PT_LOAD Segments:\n");
+    pr_err("%-5s %-18s %-18s %-18s %-12s %-12s %-8s %-8s\n",
+           "Index", "Type", "Offset", "VirtAddr", "PhysAddr", "FileSize", "MemSize", "Flags");
+    pr_err("================================================================================\n");
+
+    /* Iterate through program headers */
+    for (i = 0; i < ehdr->e_phnum; i++) {
+        if (phdr[i].p_type == PT_LOAD) {
+            pr_err("0x%-3x %-18s 0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx %c%c%c\n",
+                   i,
+                   "PT_LOAD",
+                   phdr[i].p_offset,
+                   phdr[i].p_vaddr,
+                   phdr[i].p_paddr,
+                   phdr[i].p_filesz,
+                   phdr[i].p_memsz,
+                   (phdr[i].p_flags & PF_R) ? 'R' : '-',
+                   (phdr[i].p_flags & PF_W) ? 'W' : '-',
+                   (phdr[i].p_flags & PF_X) ? 'X' : '-');
+        }
+    }
+}
+
+/**
  * update_crash_elfcorehdr() - Recreate the elfcorehdr and replace it with old
  *			       elfcorehdr in the kexec segment array.
  * @image: the active struct kimage
@@ -427,7 +488,7 @@ unsigned int arch_crash_get_elfcorehdr_size(void)
  */
 static void update_crash_elfcorehdr(struct kimage *image, struct memory_notify *mn)
 {
-	int ret;
+	int ret, i;
 	struct crash_mem *cmem = NULL;
 	struct kexec_segment *ksegment;
 	void *ptr, *mem, *elfbuf = NULL;
@@ -453,8 +514,9 @@ static void update_crash_elfcorehdr(struct kimage *image, struct memory_notify *
 		ret = remove_mem_range(&cmem, base_addr, size);
 		if (ret) {
 			pr_err("Failed to remove hot-unplugged memory from crash memory ranges\n");
-			goto out;
+                       goto out;
 		}
+
 	}
 
 	ret = crash_prepare_elf64_headers(cmem, false, &elfbuf, &elfsz);
@@ -474,6 +536,7 @@ static void update_crash_elfcorehdr(struct kimage *image, struct memory_notify *
 		goto out;
 	}
 
+	print_elf_header(elfbuf);
 	ptr = __va(mem);
 	if (ptr) {
 		/* Temporarily invalidate the crash image while it is replaced */
