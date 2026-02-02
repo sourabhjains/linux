@@ -1035,6 +1035,116 @@ struct kimage *kexec_image;
 struct kimage *kexec_crash_image;
 static int kexec_load_disabled;
 
+#ifdef CONFIG_CRASH_HOTPLUG
+/**
+ * print_elfcorehdr - Print Program headers of ELF64 header
+ * @ptr: void pointer to Elf64_Ehdr structure
+ */
+static void print_elfcorehdr(void *ptr)
+{
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)ptr;
+    Elf64_Phdr *phdr;
+    int i;
+    int pt_load_count = 0;
+    int pt_note_count = 0;
+    char *phdr_type;
+
+    if (!ehdr) {
+        pr_err("Error: NULL pointer provided\n");
+        return;
+    }
+
+    /* Get pointer to program headers */
+    phdr = (Elf64_Phdr *)((char *)ehdr + ehdr->e_phoff);
+        /* Count PT_LOAD and PT_NOTE segments */
+    for (i = 0; i < ehdr->e_phnum; i++) {
+        if (phdr[i].p_type == PT_LOAD) {
+            pt_load_count++;
+        } else if (phdr[i].p_type == PT_NOTE) {
+            pt_note_count++;
+        }
+    }
+
+    /* Print summary */
+    pr_info("ELF Program Header Summary:\n");
+    pr_info("  Total Program Headers: %d (0x%x)\n", ehdr->e_phnum, ehdr->e_phnum);
+    pr_info("  PT_LOAD segments:      %d (0x%x)\n", pt_load_count, pt_load_count);
+    pr_info("  PT_NOTE segments:      %d (0x%x)\n\n", pt_note_count, pt_note_count);
+
+
+    pr_info("Program Headers:\n");
+    pr_info("%-5s %-18s %-18s %-18s %-12s %-12s %-8s %-8s\n",
+           "Index", "Type", "Offset", "VirtAddr", "PhysAddr", "FileSize", "MemSize", "Flags");
+    pr_info("================================================================================\n");
+
+    /* Iterate through program headers */
+    for (i = 0; i < ehdr->e_phnum; i++) {
+	if (phdr[i].p_type == PT_LOAD) {
+		phdr_type = "PT_LOAD";
+	} else {
+		phdr_type = "PT_NOTE";
+	}
+
+        pr_info("0x%-3x %-18s 0x%-16llx 0x%-16llx 0x%-16llx 0x%-16llx 0x%-16llx %c%c%c\n",
+                i,
+                phdr_type,
+                phdr[i].p_offset,
+                phdr[i].p_vaddr,
+                phdr[i].p_paddr,
+                phdr[i].p_filesz,
+                phdr[i].p_memsz,
+                (phdr[i].p_flags & PF_R) ? 'R' : '-',
+                (phdr[i].p_flags & PF_W) ? 'W' : '-',
+                (phdr[i].p_flags & PF_X) ? 'X' : '-');
+    }
+}
+
+unsigned int crash_print_elfcorehdr(void)
+{
+	struct kimage *image;
+	void *ptr;
+	struct kexec_segment *ksegment;
+	if (!kexec_trylock()) {
+		pr_info("kexec_trylock() failed\n");
+		return 1;
+	}
+
+	/* Check kdump is not loaded */
+	if (!kexec_crash_image)
+		return 0;
+
+	image = kexec_crash_image;
+	/* find the elfcorehdr kexec segment index */
+	if (image->elfcorehdr_index < 0) {
+		unsigned long mem;
+		unsigned char *ptr;
+		unsigned int n;
+
+		for (n = 0; n < image->nr_segments; n++) {
+			mem = image->segment[n].mem;
+			ptr = kmap_local_page(pfn_to_page(mem >> PAGE_SHIFT));
+			if (ptr) {
+				/* The segment containing elfcorehdr */
+				if (memcmp(ptr, ELFMAG, SELFMAG) == 0)
+					image->elfcorehdr_index = (int)n;
+				kunmap_local(ptr);
+			}
+		}
+	}
+
+	if(image->elfcorehdr_index < 0) {
+		pr_err("Invalid elfcorehdr index found: %d\n", image->elfcorehdr_index);
+		return 0;
+	}
+
+	ksegment = &image->segment[image->elfcorehdr_index];
+	ptr = (void *) ksegment->mem;
+	print_elfcorehdr(__va(ptr));
+	kexec_unlock();
+	return 0;
+}
+#endif /* CONFIG_CRASH_HOTPLUG */
+
 #ifdef CONFIG_SYSCTL
 static int kexec_limit_handler(const struct ctl_table *table, int write,
 			       void *buffer, size_t *lenp, loff_t *ppos)
@@ -1303,6 +1413,16 @@ static ssize_t crash_elfcorehdr_size_show(struct kobject *kobj,
 }
 static struct kobj_attribute crash_elfcorehdr_size_attr = __ATTR_RO(crash_elfcorehdr_size);
 
+static ssize_t crash_elfcorehdr_print_show(struct kobject *kobj,
+			       struct kobj_attribute *attr, char *buf)
+{
+	unsigned int ret = crash_print_elfcorehdr();
+
+	return sysfs_emit(buf, "%u\n", ret);
+}
+static struct kobj_attribute crash_elfcorehdr_print_attr = __ATTR_RO(crash_elfcorehdr_print);
+
+
 #endif /* CONFIG_CRASH_HOTPLUG */
 #endif /* CONFIG_CRASH_DUMP */
 
@@ -1316,6 +1436,7 @@ static struct attribute *kexec_attrs[] = {
 #endif
 #ifdef CONFIG_CRASH_HOTPLUG
 	&crash_elfcorehdr_size_attr.attr,
+	&crash_elfcorehdr_print_attr.attr,
 #endif
 #endif
 	NULL

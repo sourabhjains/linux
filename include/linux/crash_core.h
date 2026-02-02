@@ -58,6 +58,8 @@ static inline int arch_crash_hotplug_support(struct kimage *image, unsigned long
 static inline unsigned int crash_get_elfcorehdr_size(void) { return 0; }
 #endif
 
+unsigned int crash_print_elfcorehdr(void);
+
 /* Alignment required for elf header segment */
 #define ELF_CORE_HEADER_ALIGN   4096
 
