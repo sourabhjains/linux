@@ -161,12 +161,43 @@ static inline resource_size_t crash_resource_size(const struct resource *res)
 	return !res->end ? 0 : resource_size(res);
 }
 
+static struct crash_mem * crash_exclude_cma_ranges(struct crash_mem *cmem)
+{
+	int i, ret;
+	struct crash_mem *tmem;
+	unsigned int needed_range_cnt;
 
+	if (crashk_cma_cnt < 1)
+		return cmem;
+
+	needed_range_cnt = cmem->nr_ranges + crashk_cma_cnt;
+
+	if (cmem->max_nr_ranges < needed_range_cnt) {
+		tmem = kmalloc(struct_size(tmem, ranges, needed_range_cnt), GFP_KERNEL);
+		if (!tmem){
+			pr_err("crash memory ranges memory allocation failed\n");
+			return NULL;
+		}
+		memcpy(tmem, cmem, cmem->nr_ranges * sizeof(cmem->ranges[0]));
+	} else {
+		tmem = cmem;
+	}
+
+	for (i = 0; i < crashk_cma_cnt; i++) {
+		ret = crash_exclude_mem_range(tmem, crashk_cma_ranges[i].start,
+					      crashk_cma_ranges[i].end);
+		if (ret)
+			return NULL;
+	}
+
+	return tmem;
+}
 
 
 int crash_prepare_elf64_headers(struct crash_mem *mem, int need_kernel_map,
 			  void **addr, unsigned long *sz)
 {
+	int ret = 0;
 	Elf64_Ehdr *ehdr;
 	Elf64_Phdr *phdr;
 	unsigned long nr_cpus = num_possible_cpus(), nr_phdr, elf_sz;
@@ -174,6 +205,11 @@ int crash_prepare_elf64_headers(struct crash_mem *mem, int need_kernel_map,
 	unsigned int cpu, i;
 	unsigned long long notes_addr;
 	unsigned long mstart, mend;
+	struct crash_mem *cmem;
+
+	cmem = crash_exclude_cma_ranges(mem);
+	if (!cmem)
+		return -ENOMEM;
 
 	/* extra phdr for vmcoreinfo ELF note */
 	nr_phdr = nr_cpus + 1;
@@ -192,8 +228,10 @@ int crash_prepare_elf64_headers(struct crash_mem *mem, int need_kernel_map,
 	elf_sz = ALIGN(elf_sz, ELF_CORE_HEADER_ALIGN);
 
 	buf = vzalloc(elf_sz);
-	if (!buf)
-		return -ENOMEM;
+	if (!buf) {
+		ret = -ENOMEM;
+		goto out;
+	}
 
 	ehdr = (Elf64_Ehdr *)buf;
 	phdr = (Elf64_Phdr *)(ehdr + 1);
@@ -239,9 +277,9 @@ int crash_prepare_elf64_headers(struct crash_mem *mem, int need_kernel_map,
 	}
 
 	/* Go through all the ranges in mem->ranges[] and prepare phdr */
-	for (i = 0; i < mem->nr_ranges; i++) {
-		mstart = mem->ranges[i].start;
-		mend = mem->ranges[i].end;
+	for (i = 0; i < cmem->nr_ranges; i++) {
+		mstart = cmem->ranges[i].start;
+		mend = cmem->ranges[i].end;
 
 		phdr->p_type = PT_LOAD;
 		phdr->p_flags = PF_R|PF_W|PF_X;
@@ -262,7 +300,10 @@ int crash_prepare_elf64_headers(struct crash_mem *mem, int need_kernel_map,
 
 	*addr = buf;
 	*sz = elf_sz;
-	return 0;
+out:
+	if (cmem != mem)
+		kfree(cmem);
+	return ret;
 }
 
 /**
