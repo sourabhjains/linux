@@ -464,7 +464,6 @@ static void print_elf_header(void *ptr)
 
     /* Iterate through program headers */
     for (i = 0; i < ehdr->e_phnum; i++) {
-        if (phdr[i].p_type == PT_LOAD) {
             pr_err("0x%-3x %-18s 0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx %c%c%c\n",
                    i,
                    "PT_LOAD",
@@ -476,8 +475,27 @@ static void print_elf_header(void *ptr)
                    (phdr[i].p_flags & PF_R) ? 'R' : '-',
                    (phdr[i].p_flags & PF_W) ? 'W' : '-',
                    (phdr[i].p_flags & PF_X) ? 'X' : '-');
-        }
     }
+}
+
+static int add_a_range_tmem(struct crash_mem **mem_ranges,
+			unsigned long long mstart,
+			unsigned long long mend)
+{
+	struct crash_mem *tmem = *mem_ranges;
+
+	/* Reallocate memory ranges if there is no space to split ranges */
+	if (tmem && (tmem->nr_ranges == tmem->max_nr_ranges)) {
+		tmem = realloc_mem_ranges(mem_ranges);
+		if (!tmem)
+			return -ENOMEM;
+	}
+
+	
+	tmem->ranges[tmem->nr_ranges].start = mstart;
+	tmem->ranges[tmem->nr_ranges].end = mend;
+	tmem->nr_ranges++;
+	return 0;
 }
 
 /**
@@ -498,6 +516,7 @@ static void update_crash_elfcorehdr(struct kimage *image, struct memory_notify *
 	mem = (void *) ksegment->mem;
 	memsz = ksegment->memsz;
 
+	pr_err("In update_crash_elfcorehdr()\n");
 	ret = get_crash_memory_ranges(&cmem);
 	if (ret) {
 		pr_err("Failed to get crash mem range\n");
@@ -517,6 +536,11 @@ static void update_crash_elfcorehdr(struct kimage *image, struct memory_notify *
                        goto out;
 		}
 
+	}
+
+	for (i = 0; i < 300; i++) {
+		add_a_range_tmem(&cmem, cmem->ranges[cmem->nr_ranges - 1].end + 1,
+					cmem->ranges[cmem->nr_ranges - 1].end + 0x10000);
 	}
 
 	ret = crash_prepare_elf64_headers(cmem, false, &elfbuf, &elfsz);
