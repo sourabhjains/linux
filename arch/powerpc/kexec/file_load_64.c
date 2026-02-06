@@ -453,6 +453,7 @@ static int load_elfcorehdr_segment(struct kimage *image, struct kexec_buf *kbuf)
 	unsigned long headers_sz;
 	void *headers = NULL;
 	int ret;
+	unsigned long total_elfcorehdr_size;
 
 	ret = get_crash_memory_ranges(&cmem);
 	if (ret)
@@ -473,11 +474,12 @@ static int load_elfcorehdr_segment(struct kimage *image, struct kexec_buf *kbuf)
 
 	/* Fix the offset for backup region in the ELF header */
 	update_backup_region_phdr(image, headers);
+	total_elfcorehdr_size = headers_sz + kdump_extra_elfcorehdr_size(cmem);
 
 	kbuf->buffer = headers;
 	kbuf->mem = KEXEC_BUF_MEM_UNKNOWN;
 	kbuf->bufsz = headers_sz;
-	kbuf->memsz = headers_sz + kdump_extra_elfcorehdr_size(cmem);
+	kbuf->memsz = total_elfcorehdr_size;
 	kbuf->top_down = false;
 
 	ret = kexec_add_buffer(kbuf);
@@ -487,7 +489,7 @@ static int load_elfcorehdr_segment(struct kimage *image, struct kexec_buf *kbuf)
 	}
 
 	image->elf_load_addr = kbuf->mem;
-	image->elf_headers_sz = headers_sz;
+	image->elf_headers_sz = total_elfcorehdr_size;
 	image->elf_headers = headers;
 out:
 	kfree(cmem);
