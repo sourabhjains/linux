@@ -458,10 +458,11 @@ static int load_elfcorehdr_segment(struct kimage *image, struct kexec_buf *kbuf)
 	if (ret)
 		goto out;
 
-	for (int i = 0; i < 1000; i++) {
+/*	for (int i = 0; i < 1000; i++) {
 		add_a_range_tmem(&cmem, cmem->ranges[cmem->nr_ranges - 1].end + 1,
 					cmem->ranges[cmem->nr_ranges - 1].end + 0x10000);
 	}
+	*/
 
 	/* Setup elfcorehdr segment */
 	ret = crash_prepare_elf64_headers(cmem, false, &headers, &headers_sz);
