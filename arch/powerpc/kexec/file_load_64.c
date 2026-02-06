@@ -418,6 +418,27 @@ static unsigned int kdump_extra_elfcorehdr_size(struct crash_mem *cmem)
 	return 0;
 }
 
+static int add_a_range_tmem(struct crash_mem **mem_ranges,
+			unsigned long long mstart,
+			unsigned long long mend)
+{
+	struct crash_mem *tmem = *mem_ranges;
+
+	/* Reallocate memory ranges if there is no space to split ranges */
+	if (tmem && (tmem->nr_ranges == tmem->max_nr_ranges)) {
+		tmem = realloc_mem_ranges(mem_ranges);
+		if (!tmem)
+			return -ENOMEM;
+	}
+
+	
+	tmem->ranges[tmem->nr_ranges].start = mstart;
+	tmem->ranges[tmem->nr_ranges].end = mend;
+	tmem->nr_ranges++;
+	return 0;
+}
+
+
 /**
  * load_elfcorehdr_segment - Setup crash memory ranges and initialize elfcorehdr
  *                           segment needed to load kdump kernel.
@@ -436,6 +457,11 @@ static int load_elfcorehdr_segment(struct kimage *image, struct kexec_buf *kbuf)
 	ret = get_crash_memory_ranges(&cmem);
 	if (ret)
 		goto out;
+
+	for (int i = 0; i < 1000; i++) {
+		add_a_range_tmem(&cmem, cmem->ranges[cmem->nr_ranges - 1].end + 1,
+					cmem->ranges[cmem->nr_ranges - 1].end + 0x10000);
+	}
 
 	/* Setup elfcorehdr segment */
 	ret = crash_prepare_elf64_headers(cmem, false, &headers, &headers_sz);
