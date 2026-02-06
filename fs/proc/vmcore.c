@@ -1249,7 +1249,6 @@ static void print_elf_header(char *ptr)
 
     /* Iterate through program headers */
     for (i = 0; i < ehdr->e_phnum; i++) {
-        if (phdr[i].p_type == PT_LOAD) {
             pr_err("0x%-3x %-18s 0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx %c%c%c\n",
                    i,
                    "PT_LOAD",
@@ -1261,7 +1260,6 @@ static void print_elf_header(char *ptr)
                    (phdr[i].p_flags & PF_R) ? 'R' : '-',
                    (phdr[i].p_flags & PF_W) ? 'W' : '-',
                    (phdr[i].p_flags & PF_X) ? 'X' : '-');
-        }
     }
 }
 

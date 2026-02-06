@@ -1080,7 +1080,6 @@ static void print_elf_header(void *ptr)
 
     /* Iterate through program headers */
     for (i = 0; i < ehdr->e_phnum; i++) {
-        if (phdr[i].p_type == PT_LOAD) {
             pr_err("0x%-3x %-18s 0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx 0x%-16lx %c%c%c\n",
                    i,
                    "PT_LOAD",
@@ -1092,7 +1091,6 @@ static void print_elf_header(void *ptr)
                    (phdr[i].p_flags & PF_R) ? 'R' : '-',
                    (phdr[i].p_flags & PF_W) ? 'W' : '-',
                    (phdr[i].p_flags & PF_X) ? 'X' : '-');
-        }
     }
 }
 
@@ -1104,7 +1102,6 @@ unsigned int crash_print_elfcorehdr(void)
 	if (!kexec_trylock()) {
 		if (!kexec_in_progress)
 			pr_info("kexec_trylock() failed, kdump image may be inaccurate\n");
-		crash_hotplug_unlock();
 		return 1;
 	}
 
@@ -1114,12 +1111,32 @@ unsigned int crash_print_elfcorehdr(void)
 
 	image = kexec_crash_image;
 
-	if(image->elfcorehdr_index < 0)
+
+	if (image->elfcorehdr_index < 0) {
+		unsigned long mem;
+		unsigned char *ptr;
+		unsigned int n;
+
+		for (n = 0; n < image->nr_segments; n++) {
+			mem = image->segment[n].mem;
+			ptr = kmap_local_page(pfn_to_page(mem >> PAGE_SHIFT));
+			if (ptr) {
+				/* The segment containing elfcorehdr */
+				if (memcmp(ptr, ELFMAG, SELFMAG) == 0)
+					image->elfcorehdr_index = (int)n;
+				kunmap_local(ptr);
+			}
+		}
+	}
+
+	if(image->elfcorehdr_index < 0) {
 		pr_err("Invalid elfcorehdr index found: %d\n", image->elfcorehdr_index);
+		return 0;
+	}
 
 	ksegment = &image->segment[image->elfcorehdr_index];
 	ptr = (void *) ksegment->mem;
-	print_elf_header(ptr);
+	print_elf_header(__va(ptr));
 	kexec_unlock();
 	return 0;
 }
@@ -1392,15 +1409,14 @@ static ssize_t crash_elfcorehdr_size_show(struct kobject *kobj,
 }
 static struct kobj_attribute crash_elfcorehdr_size_attr = __ATTR_RO(crash_elfcorehdr_size);
 
-static ssize_t crash_elfcorehdr_print(struct kobject *kobj,
+static ssize_t crash_elfcorehdr_print_show(struct kobject *kobj,
 			       struct kobj_attribute *attr, char *buf)
 {
 	unsigned int ret = crash_print_elfcorehdr();
 
 	return sysfs_emit(buf, "%u\n", ret);
 }
-static struct kobj_attribute crash_elfcorehdr_size_attr = __ATTR_RO(crash_elfcorehdr_size);
-
+static struct kobj_attribute crash_elfcorehdr_print_attr = __ATTR_RO(crash_elfcorehdr_print);
 
 
 #endif /* CONFIG_CRASH_HOTPLUG */
@@ -1416,6 +1432,7 @@ static struct attribute *kexec_attrs[] = {
 #endif
 #ifdef CONFIG_CRASH_HOTPLUG
 	&crash_elfcorehdr_size_attr.attr,
+	&crash_elfcorehdr_print_attr.attr,
 #endif
 #endif
 	NULL
