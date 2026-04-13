@@ -170,9 +170,9 @@ void panic_flush_kmsg_start(void)
 	bust_spinlocks(1);
 }
 
-void panic_flush_kmsg_end(void)
+void panic_flush_kmsg_end(const char *desc)
 {
-	kmsg_dump(KMSG_DUMP_PANIC);
+	kmsg_dump_desc(KMSG_DUMP_PANIC, desc);
 	bust_spinlocks(0);
 	debug_locks_off();
 	console_flush_on_panic(CONSOLE_FLUSH_PENDING);
@@ -471,7 +471,7 @@ DEFINE_INTERRUPT_HANDLER_NMI(system_reset_exception)
 	if (debugger(regs))
 		goto out;
 
-	kmsg_dump(KMSG_DUMP_OOPS);
+	kmsg_dump_desc(KMSG_DUMP_OOPS, "System Reset");
 	/*
 	 * A system reset is a request to dump, so we always send
 	 * it through the crashdump code (if fadump or kdump are
