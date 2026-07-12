@@ -17,6 +17,14 @@ struct page;
 bool kho_is_enabled(void);
 bool is_kho_boot(void);
 
+/*
+ * Map/unmap memory handed over by the previous kernel while KHO is being
+ * populated. Default is early_memremap()/early_memunmap(); architectures
+ * that run this before early ioremap or the MMU is ready override them.
+ */
+void *kho_early_memremap(phys_addr_t phys, unsigned long size);
+void kho_early_memunmap(void *addr, unsigned long size);
+
 int kho_preserve_folio(struct folio *folio);
 void kho_unpreserve_folio(struct folio *folio);
 int kho_preserve_pages(struct page *page, unsigned long nr_pages);

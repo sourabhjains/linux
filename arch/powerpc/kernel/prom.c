@@ -827,6 +827,18 @@ void __init early_init_devtree(void *params)
 	early_init_dt_scan_memory_ppc();
 
 	/*
+	 * Check for a KHO boot. This must run once the memory regions have
+	 * been discovered and added to memblock, because the handed-over
+	 * ranges are validated against memblock.
+	 *
+	 * It must also run before memblock_allow_resize() is called. Until
+	 * then memblock cannot reallocate its own region arrays, so no
+	 * memblock allocation has happened yet. An allocation made earlier
+	 * could land in memory that KHO needs to preserve.
+	 */
+	early_init_dt_check_kho();
+
+	/*
 	 * As generic code authors expect to be able to use static keys
 	 * in early_param() handlers, we initialize the static keys just
 	 * before parsing early params (it's fine to call jump_label_init()
