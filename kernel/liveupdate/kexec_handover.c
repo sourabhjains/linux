@@ -77,6 +77,16 @@ static bool __init kho_bootmem_alignment_ok(void)
 /* The magic token for preserved pages */
 #define KHO_PAGE_MAGIC 0x4b484f50U /* ASCII for 'KHOP' */
 
+void * __init __weak kho_early_memremap(phys_addr_t phys, unsigned long size)
+{
+	return early_memremap(phys, size);
+}
+
+void __init __weak kho_early_memunmap(void *addr, unsigned long size)
+{
+	early_memunmap(addr, size);
+}
+
 /*
  * KHO uses page->private, which is an unsigned long, to store page metadata.
  * Use it to store both the magic and the order.
@@ -2003,7 +2013,7 @@ void __init kho_populate(phys_addr_t fdt_phys, u64 fdt_len,
 	int err;
 
 	/* Validate the input FDT */
-	fdt = early_memremap(fdt_phys, fdt_len);
+	fdt = kho_early_memremap(fdt_phys, fdt_len);
 	if (!fdt) {
 		pr_warn("setup: failed to memremap FDT (0x%llx)\n", fdt_phys);
 		goto report;
@@ -2025,7 +2035,7 @@ void __init kho_populate(phys_addr_t fdt_phys, u64 fdt_len,
 	if (!mem_map_phys)
 		goto unmap_fdt;
 
-	bootmem = early_memremap(bootmem_phys, bootmem_len);
+	bootmem = kho_early_memremap(bootmem_phys, bootmem_len);
 	if (!bootmem) {
 		pr_warn("setup: failed to memremap bootmem (phys=0x%llx, len=%lld)\n",
 			bootmem_phys, bootmem_len);
@@ -2070,9 +2080,9 @@ void __init kho_populate(phys_addr_t fdt_phys, u64 fdt_len,
 	pr_info("found kexec handover data.\n");
 
 unmap_bootmem:
-	early_memunmap(bootmem, bootmem_len);
+	kho_early_memunmap(bootmem, bootmem_len);
 unmap_fdt:
-	early_memunmap(fdt, fdt_len);
+	kho_early_memunmap(fdt, fdt_len);
 report:
 	if (!populated)
 		pr_warn("disabling KHO revival\n");
