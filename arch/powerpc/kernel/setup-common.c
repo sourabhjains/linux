@@ -35,6 +35,8 @@
 #include <linux/of_irq.h>
 #include <linux/hugetlb.h>
 #include <linux/pgtable.h>
+#include <linux/libfdt.h>
+#include <linux/kexec_handover.h>
 #include <asm/io.h>
 #include <asm/paca.h>
 #include <asm/processor.h>
@@ -922,6 +924,8 @@ void __init setup_arch(char **cmdline_p)
 
 	/* Set a half-reasonable default so udelay does something sensible */
 	loops_per_jiffy = 500000000 / HZ;
+
+	early_init_dt_check_kho()
 
 	/* Unflatten the device-tree passed by prom_init or kexec */
 	unflatten_device_tree();
