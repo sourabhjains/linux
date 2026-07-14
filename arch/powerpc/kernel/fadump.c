@@ -852,7 +852,7 @@ static int fadump_alloc_mem_ranges(struct fadump_mrange_info *mrange_info)
 				       sizeof(struct fadump_memory_range));
 	return 0;
 }
-static inline int fadump_add_mem_range(struct fadump_mrange_info *mrange_info,
+static int fadump_add_mem_range(struct fadump_mrange_info *mrange_info,
 				       u64 base, u64 end)
 {
 	struct fadump_memory_range *mem_ranges = mrange_info->mem_ranges;
@@ -909,7 +909,7 @@ static inline int fadump_add_mem_range(struct fadump_mrange_info *mrange_info,
 	return 0;
 }
 
-static int fadump_init_elfcore_header(char *bufp)
+static int __init fadump_init_elfcore_header(char *bufp)
 {
 	struct elfhdr *elf;
 
@@ -950,7 +950,7 @@ static int fadump_init_elfcore_header(char *bufp)
  * return the relocated address that points to the dump region reserved
  * for saving initial boot memory contents.
  */
-static inline unsigned long fadump_relocate(unsigned long paddr)
+static unsigned long fadump_relocate(unsigned long paddr)
 {
 	unsigned long raddr, rstart, rend, rlast, hole_size;
 	int i;
