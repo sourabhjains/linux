@@ -64,44 +64,45 @@ void machine_kexec(struct kimage *image)
 
 static unsigned long long crashk_cma_size;
 
+#ifdef CONFIG_PPC64
+/*
+ * On the LPAR platform place the crash kernel to mid of
+ * RMA size (max. of 512MB) to ensure the crash kernel
+ * gets enough space to place itself and some stack to be
+ * in the first segment. At the same time normal kernel
+ * also get enough space to allocate memory for essential
+ * system resource in the first segment. Keep the crash
+ * kernel starts at 128MB offset on other platforms.
+ */
+static unsigned long long __init default_crash_base(void)
+{
+	if (!firmware_has_feature(FW_FEATURE_LPAR))
+		return min_t(u64, ppc64_rma_size / 2, SZ_128M);
+
+	return min_t(u64, ppc64_rma_size / 2, SZ_512M);
+}
+#else
+static unsigned long long __init default_crash_base(void)
+{
+	return KDUMP_KERNELBASE;
+}
+#endif
+
 static unsigned long long __init get_crash_base(unsigned long long crash_base)
 {
-
-#ifndef CONFIG_NONSTATIC_KERNEL
-	if (crash_base != KDUMP_KERNELBASE)
-		printk("Crash kernel location must be 0x%x\n",
-				KDUMP_KERNELBASE);
-
-	return KDUMP_KERNELBASE;
-#else
-	unsigned long long crash_base_align;
-
-	if (!crash_base) {
-#ifdef CONFIG_PPC64
-		/*
-		 * On the LPAR platform place the crash kernel to mid of
-		 * RMA size (max. of 512MB) to ensure the crash kernel
-		 * gets enough space to place itself and some stack to be
-		 * in the first segment. At the same time normal kernel
-		 * also get enough space to allocate memory for essential
-		 * system resource in the first segment. Keep the crash
-		 * kernel starts at 128MB offset on other platforms.
-		 */
-		if (firmware_has_feature(FW_FEATURE_LPAR))
-			crash_base = min_t(u64, ppc64_rma_size / 2, SZ_512M);
-		else
-			crash_base = min_t(u64, ppc64_rma_size / 2, SZ_128M);
-#else
-		crash_base = KDUMP_KERNELBASE;
-#endif
+	if (!IS_ENABLED(CONFIG_NONSTATIC_KERNEL)) {
+		if (crash_base != KDUMP_KERNELBASE)
+			printk("Crash kernel location must be 0x%x\n", KDUMP_KERNELBASE);
+		return KDUMP_KERNELBASE;
 	}
 
-	crash_base_align = PAGE_ALIGN(crash_base);
-	if (crash_base != crash_base_align)
+	if (!crash_base)
+		crash_base = default_crash_base();
+
+	if (!IS_ALIGNED(crash_base, PAGE_SIZE))
 		pr_warn("Crash kernel base must be aligned to 0x%lx\n", PAGE_SIZE);
 
-	return crash_base_align;
-#endif
+	return PAGE_ALIGN(crash_base);
 }
 
 void __init arch_reserve_crashkernel(void)
