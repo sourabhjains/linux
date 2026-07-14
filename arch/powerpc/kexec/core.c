@@ -66,18 +66,20 @@ static unsigned long long crashk_cma_size;
 
 #ifdef CONFIG_PPC64
 /*
- * On the LPAR platform place the crash kernel to mid of
- * RMA size (max. of 512MB) to ensure the crash kernel
- * gets enough space to place itself and some stack to be
- * in the first segment. At the same time normal kernel
- * also get enough space to allocate memory for essential
- * system resource in the first segment. Keep the crash
- * kernel starts at 128MB offset on other platforms.
+ * On LPAR systems, place the crash kernel at the midpoint of the RMA
+ * (capped at a 512MB offset) when the RMA is 1GB or smaller. For larger
+ * RMAs, place the crash kernel at the last 512MB of the RMA. This ensures
+ * the crash kernel has sufficient space while leaving enough room for the
+ * normal kernel to allocate essential system resources in the first
+ * segment. On other platforms, place the crash kernel at a 128MB offset.
  */
 static unsigned long long __init default_crash_base(void)
 {
 	if (!firmware_has_feature(FW_FEATURE_LPAR))
 		return min_t(u64, ppc64_rma_size / 2, SZ_128M);
+
+	if (!early_radix_enabled() && ppc64_rma_size > SZ_1G)
+		return ppc64_rma_size - SZ_512M;
 
 	return min_t(u64, ppc64_rma_size / 2, SZ_512M);
 }
