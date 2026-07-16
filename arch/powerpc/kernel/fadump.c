@@ -546,106 +546,150 @@ out:
 	return ret;
 }
 
+/*
+ * Validate and set the boot memory size required for fadump.
+ * Returns 0 on success, -1 if size is below the platform minimum.
+ */
+static int __init fadump_validate_boot_mem_size(void)
+{
+	u64 bootmem_min;
+
+	bootmem_min = fw_dump.ops->fadump_get_bootmem_min();
+
+	if (fw_dump.boot_memory_size < bootmem_min) {
+		pr_err("Can't enable fadump with boot memory size (0x%lx) less than 0x%llx\n",
+			fw_dump.boot_memory_size, bootmem_min);
+		return -1;
+	}
+
+	return 0;
+}
+
+/*
+ * Locate and reserve memory for fadump, at an offset closer to the
+ * bottom of RAM to minimize the impact of memory hot-remove
+ * operations. Also registers kernel metadata with firmware, if the
+ * platform supports it.
+ *
+ * Returns 0 on success, -1 on failure.
+ */
+static int __init fadump_reserve_mem_area(void)
+{
+	u64 base, size, mem_boundary;
+
+	mem_boundary = memory_limit ? memory_limit : memblock_end_of_DRAM();
+	size = get_fadump_area_size();
+	base = fadump_locate_reserve_mem(fw_dump.boot_mem_top, size);
+
+	if (!base || (base + size > mem_boundary)) {
+		pr_err("Failed to find memory chunk for reservation!\n");
+		return -1;
+	}
+
+	fw_dump.reserve_dump_area_start = base;
+	fw_dump.reserve_dump_area_size = size;
+
+	/*
+	 * Calculate the kernel metadata address and register it with
+	 * f/w if the platform supports.
+	 */
+	if (fw_dump.ops->fadump_setup_metadata &&
+	    (fw_dump.ops->fadump_setup_metadata(&fw_dump) < 0))
+		return -1;
+
+	if (memblock_reserve(base, size)) {
+		pr_err("Failed to reserve memory!\n");
+		return -1;
+	}
+
+	pr_info("Reserved %lldMB of memory at %#016llx (System RAM: %lldMB)\n",
+		(size >> 20), base, (memblock_phys_mem_size() >> 20));
+
+	return 0;
+}
+
+static int __init fadump_prepare_reserve_mem(void)
+{
+	fw_dump.boot_memory_size = fadump_calculate_reserve_size();
+
+	if (fadump_validate_boot_mem_size())
+		goto error_out;
+
+	if (!fadump_get_boot_mem_regions()) {
+		pr_err("Too many holes in boot memory area to enable fadump\n");
+		goto error_out;
+	}
+
+	if (fadump_reserve_mem_area())
+		goto error_out;
+
+	return 1;
+
+error_out:
+	fw_dump.fadump_enabled = 0;
+	fw_dump.reserve_dump_area_size = 0;
+	return 0;
+}
+
+/*
+ * Last boot has crashed and fadump was active. Reserve all memory
+ * above boot_memory_size so userspace doesn't touch it until the
+ * dump is saved; it gets released for general use once the dump is
+ * saved.
+ */
+static int __init fadump_preserve_crash_mem(void)
+{
+
+	u64 base, size;
+	base = fw_dump.boot_mem_top;
+	fw_dump.reserve_dump_area_size = size = get_fadump_area_size();
+
+	pr_info("Firmware-assisted dump is active.\n");
+
+#ifdef CONFIG_HUGETLB_PAGE
+	/*
+	 * FADump capture kernel doesn't care much about hugepages.
+	 * In fact, handling hugepages in capture kernel is asking for
+	 * trouble. So, disable HugeTLB support when fadump is active.
+	 */
+	hugetlb_disabled = true;
+#endif
+
+	/*
+	 * If last boot has crashed then reserve all the memory
+	 * above boot memory size so that we don't touch it until
+	 * dump is written to disk by userspace tool. This memory
+	 * can be released for general use by invalidating fadump.
+	 */
+	fadump_reserve_crash_area(base);
+
+	pr_debug("fadumphdr_addr = %#016lx\n", fw_dump.fadumphdr_addr);
+	pr_debug("Reserve dump area start address: 0x%lx\n", fw_dump.reserve_dump_area_start);
+	return 1;
+}
+
+/*
+ * Setup memory for fadump during early boot — reserves memory for
+ * a future crash on a normal boot, or preserves the crash memory
+ * from a previous kernel if a dump is already active.
+ *
+ * Returns 1 on success, 0 if fadump is disabled/unsupported or
+ * setup fails.
+ */
 int __init fadump_reserve_mem(void)
 {
-	u64 base, size, mem_boundary, bootmem_min;
-	int ret = 1;
-
 	if (!fw_dump.fadump_enabled)
 		return 0;
 
 	if (!fw_dump.fadump_supported) {
 		pr_info("Firmware-Assisted Dump is not supported on this hardware\n");
-		goto error_out;
+		return 0;
 	}
 
-	/*
-	 * Initialize boot memory size
-	 * If dump is active then we have already calculated the size during
-	 * first kernel.
-	 */
-	if (!fw_dump.dump_active) {
-		fw_dump.boot_memory_size =
-			PAGE_ALIGN(fadump_calculate_reserve_size());
+	if (fw_dump.dump_active)
+		return fadump_preserve_crash_mem();
 
-		bootmem_min = fw_dump.ops->fadump_get_bootmem_min();
-		if (fw_dump.boot_memory_size < bootmem_min) {
-			pr_err("Can't enable fadump with boot memory size (0x%lx) less than 0x%llx\n",
-			       fw_dump.boot_memory_size, bootmem_min);
-			goto error_out;
-		}
-
-		if (!fadump_get_boot_mem_regions()) {
-			pr_err("Too many holes in boot memory area to enable fadump\n");
-			goto error_out;
-		}
-	}
-
-	if (memory_limit)
-		mem_boundary = memory_limit;
-	else
-		mem_boundary = memblock_end_of_DRAM();
-
-	base = fw_dump.boot_mem_top;
-	size = get_fadump_area_size();
-	fw_dump.reserve_dump_area_size = size;
-	if (fw_dump.dump_active) {
-		pr_info("Firmware-assisted dump is active.\n");
-
-#ifdef CONFIG_HUGETLB_PAGE
-		/*
-		 * FADump capture kernel doesn't care much about hugepages.
-		 * In fact, handling hugepages in capture kernel is asking for
-		 * trouble. So, disable HugeTLB support when fadump is active.
-		 */
-		hugetlb_disabled = true;
-#endif
-		/*
-		 * If last boot has crashed then reserve all the memory
-		 * above boot memory size so that we don't touch it until
-		 * dump is written to disk by userspace tool. This memory
-		 * can be released for general use by invalidating fadump.
-		 */
-		fadump_reserve_crash_area(base);
-
-		pr_debug("fadumphdr_addr = %#016lx\n", fw_dump.fadumphdr_addr);
-		pr_debug("Reserve dump area start address: 0x%lx\n",
-			 fw_dump.reserve_dump_area_start);
-	} else {
-		/*
-		 * Reserve memory at an offset closer to bottom of the RAM to
-		 * minimize the impact of memory hot-remove operation.
-		 */
-		base = fadump_locate_reserve_mem(base, size);
-
-		if (!base || (base + size > mem_boundary)) {
-			pr_err("Failed to find memory chunk for reservation!\n");
-			goto error_out;
-		}
-		fw_dump.reserve_dump_area_start = base;
-
-		/*
-		 * Calculate the kernel metadata address and register it with
-		 * f/w if the platform supports.
-		 */
-		if (fw_dump.ops->fadump_setup_metadata &&
-		    (fw_dump.ops->fadump_setup_metadata(&fw_dump) < 0))
-			goto error_out;
-
-		if (memblock_reserve(base, size)) {
-			pr_err("Failed to reserve memory!\n");
-			goto error_out;
-		}
-
-		pr_info("Reserved %lldMB of memory at %#016llx (System RAM: %lldMB)\n",
-			(size >> 20), base, (memblock_phys_mem_size() >> 20));
-	}
-
-	return ret;
-error_out:
-	fw_dump.fadump_enabled = 0;
-	fw_dump.reserve_dump_area_size = 0;
-	return 0;
+	return fadump_prepare_reserve_mem();
 }
 
 /* Look for fadump= cmdline option. */
