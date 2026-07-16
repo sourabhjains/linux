@@ -581,6 +581,11 @@ static int __init fadump_reserve_mem_area(void)
 	size = get_fadump_area_size();
 	base = fadump_locate_reserve_mem(fw_dump.boot_mem_top, size);
 
+	if (firmware_has_feature(FW_FEATURE_LPAR) && !early_radix_enabled())
+		base = max(base, ppc64_rma_size);
+	else
+		base = max(base, SZ_2G);
+
 	if (!base || (base + size > mem_boundary)) {
 		pr_err("Failed to find memory chunk for reservation!\n");
 		return -1;
