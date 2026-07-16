@@ -201,7 +201,13 @@ typedef struct {
 #define RTAS_FN_WRITE_PCI_CONFIG                  rtas_fn_handle(RTAS_FNIDX__WRITE_PCI_CONFIG)
 
 #define RTAS_UNKNOWN_SERVICE (-1)
-#define RTAS_INSTANTIATE_MAX (1ULL<<30) /* Don't instantiate rtas at/above this value */
+
+/*
+ * For 32-bit RTAS, the argument buffer address passed to instantiate-rtas
+ * must fit in a 32-bit cell, so it must reside below 4 GiB. This
+ * restriction does not apply to 64-bit RTAS.
+ */
+#define RTAS_INSTANTIATE_MAX SZ_4G
 
 /* Memory set aside for sys_rtas to use with calls that need a work area. */
 #define RTAS_USER_REGION_SIZE (64 * 1024)
