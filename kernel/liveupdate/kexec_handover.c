@@ -45,9 +45,9 @@
  * at the neighboring pages (up to MAX_PAGE_ORDER) to merge them.
  * If KHO scratch is not aligned to that value, buddy can access uninitialized
  * struct pages, which can cause a crash.
- */
 #define SCRATCH_ALIGNMENT_BYTES (PAGE_SIZE * MAX_ORDER_NR_PAGES)
 static_assert(SCRATCH_ALIGNMENT_BYTES >= CMA_MIN_ALIGNMENT_BYTES);
+ */
 
 /* The magic token for preserved pages */
 #define KHO_PAGE_MAGIC 0x4b484f50U /* ASCII for 'KHOP' */
