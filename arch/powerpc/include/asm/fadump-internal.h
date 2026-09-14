@@ -65,6 +65,14 @@ static inline u64 fadump_str_to_u64(const char *str)
 #define FADUMP_CRASH_INFO_MAGIC		fadump_str_to_u64("FADMPSIG")
 #define FADUMP_HEADER_VERSION		1
 
+#define FADUMP_MAX_MEM_RANGES	256
+ 
+/* start/end of a single usable (non-kernel) physical memory range */
+struct fadump_usable_range {
+	u64	start;
+	u64	end;
+};
+ 
 /* fadump crash info structure */
 struct fadump_crash_info_header {
 	u64		magic_number;
@@ -76,6 +84,10 @@ struct fadump_crash_info_header {
 	u32		cpu_mask_sz;
 	struct pt_regs	regs;
 	struct cpumask	cpu_mask;
+ 
+	/* usable (non-kernel) physical memory ranges, fixed capacity */
+	u32				usable_ranges_cnt;
+	struct fadump_usable_range	usable_ranges[FADUMP_MAX_MEM_RANGES];
 };
 
 struct fadump_memory_range {

@@ -546,6 +546,27 @@ out:
 	return ret;
 }
 
+/* Unreserve every range in fdh from memblock, freeing it back to the allocator. */
+static void fadump_memblock_unreserve_ranges(struct fadump_crash_info_header *fdh, phys_addr_t fadump_top)
+{
+	u32 i;
+ 
+	for (i = 0; i < fdh->usable_ranges_cnt; i++) {
+		phys_addr_t start = fdh->usable_ranges[i].start;
+		phys_addr_t size  = fdh->usable_ranges[i].end - start + PAGE_SIZE;
+		if (start <= fadump_top) {
+			pr_info("memblock unreserve: start=0x%llx size=%llu bytes : SKIPPED\n",
+			(unsigned long long)start, (unsigned long long)size);
+			continue;
+		}
+ 
+		pr_info("memblock unreserve: start=0x%llx size=%llu bytes\n",
+			(unsigned long long)start, (unsigned long long)size);
+		memblock_phys_free(start, size);
+	}
+}
+
+
 int __init fadump_reserve_mem(void)
 {
 	u64 base, size, mem_boundary, bootmem_min;
@@ -608,9 +629,10 @@ int __init fadump_reserve_mem(void)
 		 */
 		fadump_reserve_crash_area(base);
 
-		pr_debug("fadumphdr_addr = %#016lx\n", fw_dump.fadumphdr_addr);
-		pr_debug("Reserve dump area start address: 0x%lx\n",
+		pr_info("fadumphdr_addr = %#016lx\n", fw_dump.fadumphdr_addr);
+		pr_info("Reserve dump area start address: 0x%lx\n",
 			 fw_dump.reserve_dump_area_start);
+		fadump_memblock_unreserve_ranges(__va(fw_dump.fadumphdr_addr), fw_dump.reserve_dump_area_start);
 	} else {
 		/*
 		 * Reserve memory at an offset closer to bottom of the RAM to
@@ -680,6 +702,142 @@ static int __init early_fadump_reserve_mem(char *p)
 }
 early_param("fadump_reserve_mem", early_fadump_reserve_mem);
 
+
+/*
+ * Insert one finished range into ranges[]. Appends while there's room;
+ * once full, replaces the current smallest entry, but only if this
+ * range is bigger - keeps ranges[] holding the highest-size ranges
+ * seen across the whole scan.
+ */
+static void fadump_insert_range(struct fadump_usable_range *ranges, u32 *cnt,
+				 phys_addr_t start, phys_addr_t end)
+{
+	phys_addr_t size = end - start + PAGE_SIZE;
+	u32 i, min_idx;
+	phys_addr_t min_size;
+ 
+	if (*cnt < FADUMP_MAX_MEM_RANGES) {
+		ranges[*cnt].start = start;
+		ranges[*cnt].end   = end;
+		(*cnt)++;
+		return;
+	}
+ 
+	min_idx = 0;
+	min_size = ranges[0].end - ranges[0].start + PAGE_SIZE;
+	for (i = 1; i < FADUMP_MAX_MEM_RANGES; i++) {
+		phys_addr_t s = ranges[i].end - ranges[i].start + PAGE_SIZE;
+ 
+		if (s < min_size) {
+			min_size = s;
+			min_idx = i;
+		}
+	}
+ 
+	if (size > min_size) {
+		ranges[min_idx].start = start;
+		ranges[min_idx].end   = end;
+	}
+}
+ 
+/*
+ * Scan physical memory and fill ranges[] with up to FADUMP_MAX_MEM_RANGES
+ * of the highest-size non-kernel ranges found. A page is "usable" if
+ * it's the shared zero page, a free buddy page, or an actively
+ * userspace-mapped anon/file page. Consecutive usable pages are merged
+ * into one range as the scan proceeds.
+ */
+static void fadump_populate_usable_ranges(struct fadump_usable_range *ranges, u32 *cnt)
+{
+	unsigned long pfn, max_pfn_bound = totalram_pages();
+	bool open = false;
+	phys_addr_t range_start = 0, range_end = 0;
+ 
+	*cnt = 0;
+ 
+	for (pfn = 0; pfn < max_pfn_bound; pfn++) {
+		struct page *page;
+		phys_addr_t addr, block_end;
+		bool usable = false;
+		unsigned long nr_pages = 1;
+ 
+		if (!pfn_valid(pfn)) {
+			if (open) {
+				fadump_insert_range(ranges, cnt, range_start, range_end);
+				open = false;
+			}
+			continue;
+		}
+ 
+		page = pfn_to_page(pfn);
+		addr = PFN_PHYS(pfn);
+ 
+		if (PageBuddy(page)) {
+			/* PageBuddy() only flags the block's head page;
+			 * page_private() holds the block order - treat
+			 * the whole block as one usable span. */
+			nr_pages = 1UL << page_private(page);
+			usable = true;
+		} else if (page == ZERO_PAGE(0)) {
+			usable = true;
+		} else if (folio_mapped(page_folio(page)) &&
+			   (PageAnon(page) || page->mapping)) {
+			usable = true;
+		}
+ 
+		if (!usable) {
+			if (open) {
+				fadump_insert_range(ranges, cnt, range_start, range_end);
+				open = false;
+			}
+			continue;
+		}
+ 
+		block_end = addr + (nr_pages - 1) * PAGE_SIZE;
+ 
+		if (open && range_end + PAGE_SIZE == addr) {
+			range_end = block_end;
+		} else {
+			if (open)
+				fadump_insert_range(ranges, cnt, range_start, range_end);
+			range_start = addr;
+			range_end = block_end;
+			open = true;
+		}
+ 
+		pfn += nr_pages - 1;
+	}
+ 
+	if (open)
+		fadump_insert_range(ranges, cnt, range_start, range_end);
+}
+ 
+/* Print every range currently stored in fdh, with start, end, and size. */
+static void fadump_print_usable_ranges(struct fadump_crash_info_header *fdh)
+{
+	u32 i;
+ 
+	for (i = 0; i < fdh->usable_ranges_cnt; i++) {
+		u64 start = fdh->usable_ranges[i].start;
+		u64 end   = fdh->usable_ranges[i].end;
+		u64 size  = end - start + PAGE_SIZE;
+ 
+		pr_info("usable range: 0x%llx-0x%llx size=%llu bytes\n",
+			start, end, size);
+	}
+}
+ 
+/* ---- primary function ---- */
+ 
+static void fadump_scan_usable_ranges(struct fadump_crash_info_header *fdh)
+{
+	if (!fdh)
+		return;
+ 
+	fadump_populate_usable_ranges(fdh->usable_ranges, &fdh->usable_ranges_cnt);
+	fadump_print_usable_ranges(fdh);
+}
+
 void crash_fadump(struct pt_regs *regs, const char *str)
 {
 	unsigned int msecs;
@@ -719,6 +877,7 @@ void crash_fadump(struct pt_regs *regs, const char *str)
 	fdh = __va(fw_dump.fadumphdr_addr);
 	fdh->crashing_cpu = crashing_cpu;
 	crash_save_vmcoreinfo();
+	fadump_scan_usable_ranges(fdh);
 
 	if (regs)
 		fdh->regs = *regs;
