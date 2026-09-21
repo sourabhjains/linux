@@ -844,6 +844,42 @@ bool kho_scratch_overlap(phys_addr_t phys, size_t size)
 	return false;
 }
 
+static void __init scratch_size_print(char *s)
+{
+	int nid;
+	phys_addr_t size;
+
+	pr_info("%s\n", s);
+	pr_info("memblock reserve hugetlb size: %llu",
+		memblock_reserved_size_nid(ARCH_LOW_ADDRESS_LIMIT,
+					   NUMA_NO_NODE,
+					   MEMBLOCK_RSRV_HUGETLB));
+	size = memblock_reserved_size_nid(ARCH_LOW_ADDRESS_LIMIT,
+					  NUMA_NO_NODE,
+					  MEMBLOCK_RSRV_KERN);
+	pr_info("low size = %llu KB\n", (unsigned long long)(size >> 10));
+
+	pr_info("memblock reserve hugetlb size global: %llu",
+		memblock_reserved_size_nid(MEMBLOCK_ALLOC_ANYWHERE,
+					   NUMA_NO_NODE,
+					   MEMBLOCK_RSRV_HUGETLB));
+	size = memblock_reserved_size_nid(MEMBLOCK_ALLOC_ANYWHERE,
+					   NUMA_NO_NODE,
+					   MEMBLOCK_RSRV_KERN);
+	pr_info("global size = %llu MB\n", (unsigned long long)(size >> 20));
+
+       for_each_node_state(nid, N_MEMORY) {
+		pr_info("memblock reserve hugetlb size per node (nid = %d): %llu",
+			nid,
+			memblock_reserved_size_nid(MEMBLOCK_ALLOC_ANYWHERE, nid,
+						       MEMBLOCK_RSRV_HUGETLB));
+		size = memblock_reserved_size_nid(MEMBLOCK_ALLOC_ANYWHERE, nid,
+						  MEMBLOCK_RSRV_KERN);
+		pr_info("Per node %d = %llu MB\n", nid, (unsigned long long)(size >> 20));
+       }
+}
+
+
 /**
  * kho_reserve_scratch - Reserve a contiguous chunk of memory for kexec
  *
@@ -872,6 +908,7 @@ static void __init kho_reserve_scratch(void)
 		goto err_disable_kho;
 	}
 
+	scratch_size_print("Before low and global scratch allocations");
 	/*
 	 * reserve scratch area in low memory for lowmem allocations in the
 	 * next kernel
@@ -904,6 +941,7 @@ static void __init kho_reserve_scratch(void)
 	 * Loop over nodes that have both memory and are online. Skip
 	 * memoryless nodes, as we can not allocate scratch areas there.
 	 */
+	scratch_size_print("After low and global scratch allocations");
 	for_each_node_state(nid, N_MEMORY) {
 		size = scratch_size_node(nid);
 		addr = memblock_alloc_range_nid(size, SCRATCH_ALIGNMENT_BYTES,
@@ -918,6 +956,7 @@ static void __init kho_reserve_scratch(void)
 		kho_scratch[i].size = size;
 		i++;
 	}
+	scratch_size_print("After per node allocation");
 
 	return;
 
