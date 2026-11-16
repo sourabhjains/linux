@@ -48,7 +48,31 @@
  * which can cause a crash.
  */
 #define BOOTMEM_ALIGNMENT_BYTES (PAGE_SIZE * MAX_ORDER_NR_PAGES)
+
+/*
+ * CMA_MIN_ALIGNMENT_BYTES depends on pageblock_order, which is not a
+ * compile-time constant with CONFIG_HUGETLB_PAGE_SIZE_VARIABLE (e.g. on
+ * powerpc), so static_assert() cannot be used there. Check at runtime.
+ */
+#ifndef CONFIG_HUGETLB_PAGE_SIZE_VARIABLE
 static_assert(BOOTMEM_ALIGNMENT_BYTES >= CMA_MIN_ALIGNMENT_BYTES);
+
+static inline bool kho_bootmem_alignment_ok(void)
+{
+	return true;
+}
+#else
+static bool __init kho_bootmem_alignment_ok(void)
+{
+	if (BOOTMEM_ALIGNMENT_BYTES >= CMA_MIN_ALIGNMENT_BYTES)
+		return true;
+
+	pr_err("bootmem alignment %lu < CMA minimum %lu, disabling KHO\n",
+	       (unsigned long)BOOTMEM_ALIGNMENT_BYTES,
+	       (unsigned long)CMA_MIN_ALIGNMENT_BYTES);
+	return false;
+}
+#endif
 
 /* The magic token for preserved pages */
 #define KHO_PAGE_MAGIC 0x4b484f50U /* ASCII for 'KHOP' */
@@ -836,6 +860,11 @@ static void __init kho_reserve_bootmem(void)
 
 	if (!kho_enable)
 		return;
+
+	if (!kho_bootmem_alignment_ok()) {
+		kho_enable = false;
+		return;
+	}
 
 	bootmem_size_update();
 
