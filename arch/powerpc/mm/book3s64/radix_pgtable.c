@@ -49,11 +49,6 @@ static __ref void *early_alloc_pgtable(unsigned long size, int nid,
 	phys_addr_t max_addr = MEMBLOCK_ALLOC_ANYWHERE;
 	void *ptr;
 
-	if (region_start)
-		min_addr = region_start;
-	if (region_end)
-		max_addr = region_end;
-
 	ptr = memblock_alloc_try_nid(size, size, min_addr, max_addr, nid);
 
 	if (!ptr)
